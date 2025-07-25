@@ -39,6 +39,10 @@ const validateUpdateProfile = [
     .trim()
     .isLength({ max: 50 })
     .withMessage('يجب أن يكون طول اسم العائلة أقل من 50 حرفاً.'),
+  body('lname')
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('يجب أن يكون طول اسم العائلة أقل من 50 حرفاً.'),
 
   body('email')
     .optional()
@@ -111,7 +115,7 @@ exports.updateProfile = [
       }
 
       // Update other fields
-      const allowedUpdates = ['fname', 'lname', 'image',"email"];
+      const allowedUpdates = ['fname', 'lname', 'image',"email","city"];
       allowedUpdates.forEach((field) => {
         if (updates[field] !== undefined && field !== 'phone' && field !== 'email' && field !== 'password') {
           student[field] = updates[field];

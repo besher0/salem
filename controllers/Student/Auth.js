@@ -154,7 +154,10 @@ const validateSignup = [
     .trim()
     .isLength({ max: 50 })
     .withMessage('يجب أن يكون طول اسم العائلة أقل من 50 حرفاً.'),
-
+  body('city')
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('يجب أن يكون طول اسم العائلة أقل من 50 حرفاً.'),
   body('email')
   //  .notEmpty()
     // .isEmail()
@@ -200,6 +203,10 @@ const validateLogin = [
     .withMessage('رمز deviceId مطلوب')
     .isString()
     .withMessage('رمز deviceId يجب أن يكون نصاً'),
+  body('city')
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('يجب أن يكون طول اسم العائلة أقل من 50 حرفاً.'),
       body('phone')
     .trim()
     .isString().notEmpty().isLength({ max: 10,min:10 })
@@ -218,7 +225,7 @@ exports.signup = [
           .json({ errors: errors.array() });
       }
 
-      const { fname, lname, email, otp, password, deviceId, phone, image } =
+      const { fname, lname, email, otp, password, deviceId, phone, image,city } =
         req.body;
 
       // console.log(`Signup requested for email: ${email}`);
@@ -266,6 +273,7 @@ exports.signup = [
       const student = new Student({
         fname,
         lname,
+        city,
         email,
         deviceId,
         phone,

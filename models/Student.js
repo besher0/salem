@@ -9,6 +9,7 @@ const studentSchema = new Schema(
     email: { type: String, 
     //  unique: true, sparse: true
      },
+    city:{type:String},
     deviceId: {
       type: String,
       required: true,
