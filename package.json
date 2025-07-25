@@ -25,6 +25,7 @@
     "mongoose": "^8.16.4",
     "mongoose-paginate-v2": "^1.9.1",
     "morgan": "^1.10.1",
+    "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "path": "^0.12.7",
     "pdfkit": "^0.17.1",
