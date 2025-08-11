@@ -54,9 +54,9 @@ app.use((req, res, next) => {
 
 app.use('/admin', adminRouter);
 app.use('/', studentRouter);
-app.use('/',(req,res)=>{
-  res.json({message:"Welcome to the server besher"})
-} );
+// app.use('/',(req,res)=>{
+//   res.json({message:"Welcome to the server besher"})
+// } );
 
 app.use((req, res, next) => {
   // if (req.files) {
