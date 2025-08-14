@@ -45,7 +45,8 @@ exports.addVideo = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error:', error);
+    //console.error( error);
+    console.log(error);
     res.status(500).json({
       error: error.response?.data || error.message,
     });
