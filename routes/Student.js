@@ -20,6 +20,7 @@ const {
   getAccessibleCoursesByMaterial,
   getAccessibleVideosByCourse,
   getQuestionGroupWithQuestion,
+  getCourseFiles,
 } = require('../controllers/Student/Paid content');
 const {
   getFreeCourses,
@@ -60,6 +61,7 @@ router.get('/lessons', multerGlobal, isAuth, getLessons);
 router.get('/questions', isAuth, getAccessibleQuestions);
 router.get('/question', isAuth, getQuestionGroupWithQuestion);
 router.get('/courses', isAuth, getAccessibleCoursesByMaterial);
+router.get('/courseFiles/:course', isAuth, getCourseFiles);
 router.get('/videos', isAuth, getAccessibleVideosByCourse);
 router.get('/resolutions', getResolutions);
 

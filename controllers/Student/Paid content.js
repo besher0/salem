@@ -193,7 +193,12 @@ exports.getAccessibleCoursesByMaterial = async (req, res) => {
       },
     })
       .select('courses')
-      .populate('courses');
+      .populate({
+    path: 'courses', 
+    populate: {
+      path: 'teacher', 
+      select: 'fname lname' 
+    }});
 
     const courseIds = accessibleCodesGroups.flatMap((group) => group.courses);
     const filteredCourses = courseIds.filter(
@@ -366,5 +371,69 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
   } catch (err) {
     console.error('Error in getQuestionGroupWithQuestion:', err);
     res.status(500).json({ error: err.message || 'حدث خطأ في الخادم.' });
+  }
+
+
+};
+
+const CourseFile = require('../../models/CourseFile');
+
+// Get Course Files with Access Verification
+exports.getCourseFiles = async (req, res) => {
+  try {
+    const { course } = req.params;
+    const studentId = req.userId;
+
+    // Validate course ID
+    if (!course || !mongoose.Types.ObjectId.isValid(course)) {
+      return res.status(400).json({ message: 'معرف الدورة غير صالح.' });
+    }
+
+    const courseId = new mongoose.Types.ObjectId(course);
+
+    // Get student with redeemed codes
+    const student = await Student.findById(studentId)
+      .select('redeemedCodes')
+      .lean();
+
+    if (!student) {
+      return res.status(404).json({ message: 'لم يتم العثور على الطالب.' });
+    }
+
+    // Check course access
+    let hasAccess = false;
+    const now = new Date();
+
+    if (student.redeemedCodes && student.redeemedCodes.length > 0) {
+      // Extract codesGroups and codes from student
+      const redeemedGroupIds = student.redeemedCodes.map(rc => rc.codesGroup);
+      const redeemedCodes = student.redeemedCodes.map(rc => rc.code);
+
+      const accessCheck = await CodesGroup.findOne({
+        courses: courseId,
+        expiration: { $gt: now },
+        _id: { $in: redeemedGroupIds },
+        codes: {
+          $elemMatch: {
+            value: { $in: redeemedCodes },
+            isUsed: true, // أو false حسب المنطق المطلوب
+          },
+        },
+      });
+
+      hasAccess = !!accessCheck;
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'ليس لديك صلاحية الوصول لهذه الدورة.' });
+    }
+
+    // Fetch course files
+    const courseFiles = await CourseFile.find({ course: courseId }).lean();
+
+    res.json({ courseFiles });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'حدث خطأ في السيرفر.' });
   }
 };
