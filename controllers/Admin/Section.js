@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
-const Unit = require('../../models/Unit');
+const Section = require('../../models/Section');
 const Material = require('../../models/Material');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 
-// Create a new unit
-exports.createUnit = [
+// Create a new Section
+exports.createSection = [
   body('name').notEmpty().withMessage('يرجى إدخال اسم الوحدة.'),
   body('color')
     .optional()
@@ -36,11 +36,11 @@ exports.createUnit = [
           .json({ message: 'عذراً، لم يتم العثور على المادة.' });
       }
 
-      const unit = new Unit(req.body);
-      await unit.save();
-      const { _id, name, color, icon, material } = unit;
+      const Section = new Section(req.body);
+      await Section.save();
+      const { _id, name, color, icon, material } = Section;
       res.status(201).json({
-        unit: {
+        Section: {
           _id,
           name,
           color,
@@ -56,8 +56,8 @@ exports.createUnit = [
   },
 ];
 
-// Retrieve units with optional filters and pagination
-exports.getUnits = async (req, res) => {
+// Retrieve Sections with optional filters and pagination
+exports.getSections = async (req, res) => {
   try {
     const { page = 1, limit = 10, name, material } = req.query;
     const filter = {};
@@ -77,26 +77,26 @@ exports.getUnits = async (req, res) => {
       filter.material = new mongoose.Types.ObjectId(material);
     }
 
-    const aggregateQuery = Unit.aggregate()
+    const aggregateQuery = Section.aggregate()
       .match(filter)
       .lookup({
-        from: 'lessons', // collection name for Lesson documents
-        localField: '_id', // the field in Unit to match on
-        foreignField: 'unit', // the field in Lesson referencing Unit
-        as: 'lessons',
+        from: 'Sections', // collection name for Section documents
+        localField: '_id', // the field in Section to match on
+        foreignField: 'Section', // the field in Section referencing Section
+        as: 'Sections',
       })
       .addFields({
-        lessonCount: { $size: '$lessons' },
+        SectionCount: { $size: '$Sections' },
       })
-      .project({ lessons: 0 }); // Optionally remove the lessons array
+      .project({ Sections: 0 }); // Optionally remove the Sections array
 
     // Apply skip and limit for pagination
     aggregateQuery.skip((parseInt(page, 10) - 1) * (parseInt(limit, 10) || 10));
     aggregateQuery.limit(parseInt(limit, 10) || 10);
 
-    const unitsWithCount = await aggregateQuery.exec();
+    const SectionsWithCount = await aggregateQuery.exec();
 
-    res.status(200).json(unitsWithCount);
+    res.status(200).json(SectionsWithCount);
   } catch (err) {
     res
       .status(err.statusCode || 500)
@@ -104,8 +104,8 @@ exports.getUnits = async (req, res) => {
   }
 };
 
-// Delete a unit by ID
-exports.deleteUnit = [
+// Delete a Section by ID
+exports.deleteSection = [
   param('id').isMongoId().withMessage('يرجى إدخال رقم تعريف الوحدة بشكل صحيح.'),
   async (req, res) => {
     try {
@@ -114,8 +114,8 @@ exports.deleteUnit = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const unit = await Unit.findByIdAndDelete(req.params.id);
-      if (!unit) {
+      const Section = await Section.findByIdAndDelete(req.params.id);
+      if (!Section) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الوحدة.' });
@@ -129,8 +129,8 @@ exports.deleteUnit = [
   },
 ];
 
-// Update Unit controller
-exports.updateUnit = [
+// Update Section controller
+exports.updateSection = [
   param('id').isMongoId().withMessage('يرجى إدخال رقم تعريف الوحدة بشكل صحيح.'),
   body('name').optional().notEmpty().withMessage('يرجى إدخال اسم الوحدة.'),
   body('color')
@@ -154,9 +154,9 @@ exports.updateUnit = [
         return res.status(400).json({ errors: errors.array() });
       }
 
-      // Check if unit exists
-      const unit = await Unit.findById(req.params.id);
-      if (!unit) {
+      // Check if Section exists
+      const Section = await Section.findById(req.params.id);
+      if (!Section) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الوحدة.' });
@@ -174,7 +174,7 @@ exports.updateUnit = [
         }
       }
 
-      const updatedUnit = await Unit.findByIdAndUpdate(
+      const updatedSection = await Section.findByIdAndUpdate(
         req.params.id,
         req.body,
         { new: true, runValidators: true }
@@ -182,7 +182,7 @@ exports.updateUnit = [
 
       res.status(200).json({
         message: 'تم تحديث الوحدة بنجاح.',
-        unit: updatedUnit,
+        Section: updatedSection,
       });
     } catch (err) {
       res.status(err.statusCode || 500).json({

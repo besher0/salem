@@ -6,7 +6,7 @@ const Question = require('../../models/QuestionGroup');
 const Course = require('../../models/Course');
 const Video = require('../../models/Video');
 const QuestionGroup = require('../../models/QuestionGroup');
-const Lesson = require('../../models/Lesson');
+const Section = require('../../models/Section');
 
 exports.getAccessibleMaterials = async (req, res) => {
   try {
@@ -19,23 +19,23 @@ exports.getAccessibleMaterials = async (req, res) => {
 
     const now = new Date();
     const questionMaterialIds = new Set();
-    const lectureMaterialIds = new Set();
+    const filesMaterialIds = new Set();
 
-    // Separate materials into question and lecture categories
+    // Separate materials into question and files categories
     for (const redemption of student.redeemedCodes) {
       const codesGroup = await CodesGroup.findOne({
         _id: redemption.codesGroup,
         expiration: { $gt: now },
         'codes.value': redemption.code,
         'codes.isUsed': true,
-      }).select('materialsWithQuestions materialsWithLectures');
+      }).select('materialsWithQuestions materialsWithfiless');
 
       if (codesGroup) {
         codesGroup.materialsWithQuestions.forEach((id) =>
           questionMaterialIds.add(id.toString())
         );
-        codesGroup.materialsWithLectures.forEach((id) =>
-          lectureMaterialIds.add(id.toString())
+        codesGroup.materialsWithfiless.forEach((id) =>
+          filesMaterialIds.add(id.toString())
         );
       }
     }
@@ -44,27 +44,27 @@ exports.getAccessibleMaterials = async (req, res) => {
     const questionIdsArray = Array.from(questionMaterialIds).map(
       (id) => new mongoose.Types.ObjectId(id)
     );
-    const lectureIdsArray = Array.from(lectureMaterialIds).map(
+    const filesIdsArray = Array.from(filesMaterialIds).map(
       (id) => new mongoose.Types.ObjectId(id)
     );
 
     // Fetch materials in parallel
-    const [materialsWithQuestions, materialsWithLectures] = await Promise.all([
+    const [materialsWithQuestions, materialsWithfiless] = await Promise.all([
       Material.find({ _id: { $in: questionIdsArray } })
         .select('-__v -createdAt -updatedAt')
         .lean(),
 
-      Material.find({ _id: { $in: lectureIdsArray } })
+      Material.find({ _id: { $in: filesIdsArray } })
         .select('-__v -createdAt -updatedAt')
         .lean(),
     ]);
 
     res.status(200).json({
       materialsWithQuestions,
-      materialsWithLectures,
+      materialsWithfiless,
       count: {
         questions: materialsWithQuestions.length,
-        lectures: materialsWithLectures.length,
+        filess: materialsWithfiless.length,
       },
     });
   } catch (err) {
@@ -73,92 +73,18 @@ exports.getAccessibleMaterials = async (req, res) => {
   }
 };
 
+// controllers/Student/Question.js
 exports.getAccessibleQuestions = async (req, res) => {
   try {
-    const { limit = 10, page = 1, lesson } = req.query;
-    const studentId = req.userId;
+    const { material, section } = req.query;
+    if (!material || !section)
+      return res.status(400).json({ success: false, message: 'material & section مطلوبة' });
 
-    if (!lesson) return res.status(400).json({ message: 'معرف الدرس مطلوب.' });
-    if (!mongoose.Types.ObjectId.isValid(lesson)) {
-      return res.status(400).json({ message: 'صيغة معرف الدرس غير صالحة.' });
-    }
-
-    const lessonId = new mongoose.Types.ObjectId(lesson);
-    const lessonDoc = await Lesson.findById(lessonId)
-      .select('unit')
-      .populate({ path: 'unit', select: 'material' });
-    if (!lessonDoc?.unit?.material) {
-      return res.status(404).json({ message: 'الدرس غير موجود.' });
-    }
-
-    const materialId = lessonDoc.unit.material;
-    const student = await Student.findById(studentId)
-      .select('redeemedCodes favorites')
-      .lean();
-
-    if (!student)
-      return res
-        .status(404)
-        .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
-
-    const now = new Date();
-    let hasAccess = false;
-    const redemptionQueries = student.redeemedCodes.map((redemption) => ({
-      _id: redemption.codesGroup,
-      expiration: { $gt: now },
-      'codes.value': redemption.code,
-      'codes.isUsed': true,
-      $or: [
-        { materialsWithQuestions: materialId },
-        { materialsWithLectures: materialId },
-      ],
-    }));
-
-    if (redemptionQueries.length > 0) {
-      const codesGroup = await CodesGroup.findOne({ $or: redemptionQueries });
-      if (codesGroup) hasAccess = true;
-    }
-
-    if (!hasAccess) {
-      return res
-        .status(403)
-        .json({ message: 'ليس لديك صلاحية الوصول لهذه المادة.' });
-    }
-
-    const pageSize = parseInt(limit, 10);
-    const currentPage = parseInt(page, 10);
-    const questionGroups = await QuestionGroup.find({ lesson: lessonId })
-      .skip((currentPage - 1) * pageSize)
-      .limit(pageSize)
-      .lean();
-
-    const favoriteMap = new Map();
-    student.favorites.forEach((fav) => {
-      favoriteMap.set(`${fav.questionGroup}_${fav.index}`, true);
-    });
-
-    const enhanced = questionGroups.map((group) => ({
-      ...group,
-      questions: group.questions?.map((q, i) => ({
-        ...q,
-        isFavorite: favoriteMap.has(`${group._id}_${i}`),
-      })),
-    }));
-
-    const total = await QuestionGroup.countDocuments({ lesson: lessonId });
-
-    res.status(200).json({
-      docs: enhanced,
-      totalDocs: total,
-      limit: pageSize,
-      page: currentPage,
-      totalPages: Math.ceil(total / pageSize),
-    });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'حدث خطأ في الخادم.' });
-  }
+    const groups = await QuestionGroup.find({ material, section }).lean();
+    return res.json({ success: true, data: groups });
+  } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
 };
+
 
 exports.getAccessibleCoursesByMaterial = async (req, res) => {
   try {
@@ -318,20 +244,20 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
 
     const questionGroup = await QuestionGroup.findById(questionGroupId)
       .populate({
-        path: 'lesson',
-        select: 'unit',
-        populate: { path: 'unit', select: 'material' },
+        path: 'Section',
+        select: 'Section',
+        populate: { path: 'Section', select: 'material' },
       })
       .select('paragraph questions images')
       .lean();
 
     if (!questionGroup)
       return res.status(404).json({ message: 'لم يتم العثور على المجموعة.' });
-    if (!questionGroup.lesson?.unit?.material) {
+    if (!questionGroup.Section?.Section?.material) {
       return res.status(404).json({ message: 'الدرس أو الوحدة غير موجودة.' });
     }
 
-    const materialId = questionGroup.lesson.unit.material;
+    const materialId = questionGroup.Section.Section.material;
     const now = new Date();
     let hasAccess = false;
 
@@ -342,7 +268,7 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
       'codes.isUsed': true,
       $or: [
         { materialsWithQuestions: materialId },
-        { materialsWithLectures: materialId },
+        { materialsWithfiless: materialId },
       ],
     }));
 
@@ -376,7 +302,6 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
 
 };
 
-const CourseFile = require('../../models/CourseFile');
 
 // Get Course Files with Access Verification
 exports.getCourseFiles = async (req, res) => {
@@ -436,4 +361,97 @@ exports.getCourseFiles = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'حدث خطأ في السيرفر.' });
   }
+
+}
+exports.getExamByMaterial = async (req, res) => {
+  try {
+    const { material } = req.params;
+
+    if (!material) {
+      return res.status(400).json({ success: false, message: 'material مطلوب' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(material)) {
+      return res.status(400).json({ success: false, message: 'صيغة معرف المادة غير صالحة' });
+    }
+
+    // اجمع كل أسئلة جميع الأقسام ضمن المادة
+    const groups = await QuestionGroup.find({ material })
+      .select('questions')
+      .lean();
+
+    const allQuestions = groups.flatMap(g => g.questions || []);
+
+    if (allQuestions.length === 0) {
+      return res.status(404).json({ success: false, message: 'ما في أسئلة لهالمادة' });
+    }
+
+    // لو بدك عينة ثابتة (مثلاً 40 سؤال)
+    const MAX_Q = 40;
+    const shuffled = allQuestions.sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, Math.min(MAX_Q, shuffled.length));
+
+    return res.json({ success: true, data: picked });
+  } catch (e) {
+    console.error('Error in getExamByMaterial:', e);
+    return res.status(500).json({ success: false, message: e.message });
+  }
+}
+exports.getVideosByMaterialSection = async (req, res) => {
+  const { material, section, page = 1, limit = 20 } = req.query;
+  if (!material || !section) return res.status(400).json({ message: 'material & section مطلوبة' });
+
+  const q = { material, section };
+  const count = await Video.countDocuments(q);
+  const docs = await Video.find(q)
+    .sort({ order: 1, createdAt: -1 })
+    .skip((+page-1)*+limit)
+    .limit(+limit);
+
+  res.json({ docs, totalDocs: count, page: +page, limit: +limit, totalPages: Math.ceil(count/+limit) });
 };
+
+
+
+exports.getVideos = async (req, res) => {
+  try {
+    const student = await Student.findById(req.user._id).lean();
+    const redeemedCodes = student.redeemedCodes || [];
+
+    // جلب مجموعات الرموز المستردة التي لا تزال صالحة
+    const validCodes = await CodesGroup.find({
+      'codes.value': { $in: redeemedCodes.map(c => c.code) },
+      expiration: { $gte: new Date() }
+    }).lean();
+
+    // استخراج المواد المرتبطة بالرموز المستردة
+    const accessibleMaterials = validCodes.flatMap(group => group.materialsWithQuestions || []).map(id => id.toString());
+    const accessibleLectures = validCodes.flatMap(group => group.materialsWithfiless || []).map(id => id.toString());
+    const accessibleMaterialsSet = new Set([...accessibleMaterials, ...accessibleLectures]);
+
+    let videos;
+    if (accessibleMaterialsSet.size > 0) {
+      // إذا كان لديه رموز مفعلة، جلب كل الفيديوهات المرتبطة بالمواد المسموح بها
+      videos = await Video.find({
+        material: { $in: Array.from(accessibleMaterialsSet) }
+      })
+        .populate('material', 'name')
+        .populate('section', 'name')
+        .sort({ order: 1 })
+        .lean();
+    } else {
+      // إذا لم يكن لديه رموز، جلب الفيديوهات المجانية فقط
+      videos = await Video.find({ isFree: true })
+        .populate('material', 'name')
+        .populate('section', 'name')
+        .sort({ order: 1 })
+        .lean();
+    }
+
+    res.status(200).json(videos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'حدث خطأ أثناء جلب الفيديوهات' });
+  }
+}
+

@@ -7,13 +7,20 @@ const questionGroupSchema = new Schema(
     paragraph: String,
     images: [
       {
-        filename: String,
+        name: String,
         accessUrl: String,
       },
     ],
-    lesson: {
+    material: {
       type: Schema.Types.ObjectId,
-      ref: 'Lesson',
+      ref: 'Material',
+      required: true,
+    },
+
+    // ربط بالقسم / الوحدة
+    section: {
+      type: Schema.Types.ObjectId,
+      ref: 'Section', // أو Section إذا عندك موديل بهذا الاسم
       required: true,
     },
     questions: [
@@ -47,7 +54,7 @@ const questionGroupSchema = new Schema(
         },
         infoImages: [
           {
-            filename: String,
+            name: String,
             accessUrl: String,
           },
         ],
@@ -58,5 +65,7 @@ const questionGroupSchema = new Schema(
 );
 questionGroupSchema.plugin(mongoosePaginate);
 questionGroupSchema.index({ material: 1 });
+questionGroupSchema.index({ section: 1 });
+questionGroupSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('QuestionGroup', questionGroupSchema);

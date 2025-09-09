@@ -45,12 +45,16 @@ const codesGroupSchema = new Schema(
         required: true,
       },
     ],
-    courses: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Course',
-      },
-    ],
+    // courses: [
+    //   {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'Course',
+    //   },
+    // ],
+      sections: [{ 
+        type: mongoose.Schema.Types.ObjectId,
+         ref: 'Section' 
+        }],
   },
   { timestamps: true }
 );

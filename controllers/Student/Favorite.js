@@ -33,19 +33,19 @@ exports.addFavoriteQuestionGroup = [
       const questionGroup = await QuestionGroup.findById(
         questionGroupId
       ).populate({
-        path: 'lesson',
-        select: 'unit',
-        populate: { path: 'unit', select: 'material' },
+        path: 'Section',
+        select: 'Section',
+        populate: { path: 'Section', select: 'material' },
       });
 
-      if (!questionGroup?.lesson?.unit?.material) {
+      if (!questionGroup?.Section?.Section?.material) {
         return res.status(404).json({
           message:
             'عذراً، لم يتم العثور على مجموعة الأسئلة أو الدرس أو الوحدة.',
         });
       }
 
-      const materialId = questionGroup.lesson.unit.material.toString();
+      const materialId = questionGroup.Section.Section.material.toString();
       const student = await Student.findById(studentId).populate(
         'redeemedCodes.codesGroup'
       );
@@ -63,7 +63,7 @@ exports.addFavoriteQuestionGroup = [
           codesGroup.materialsWithQuestions.some(
             (m) => m.toString() === materialId
           ) ||
-          codesGroup.materialsWithLectures.some(
+          codesGroup.materialsWithfiless.some(
             (m) => m.toString() === materialId
           );
 

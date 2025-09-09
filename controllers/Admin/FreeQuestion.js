@@ -3,7 +3,7 @@ const QuestionGroup = require('../../models/QuestionGroup');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
-const Lesson = require('../../models/Lesson');
+const Section = require('../../models/Section');
 
  exports.copyQuestionsToFree = [
   body('numOfGroups')
@@ -24,12 +24,12 @@ const Lesson = require('../../models/Lesson');
       await FreeQuestionGroup.deleteMany({});
 
       // الحصول على الدروس التي تحتوي على مجموعات أسئلة تحتوي على سؤال واحد فقط
-      const lessonsWithSingleQuestionGroups = await Lesson.aggregate([
+      const SectionsWithSingleQuestionGroups = await Section.aggregate([
         {
           $lookup: {
             from: 'questiongroups',
             localField: '_id',
-            foreignField: 'lesson',
+            foreignField: 'Section',
             as: 'groups',
           },
         },
@@ -49,11 +49,11 @@ const Lesson = require('../../models/Lesson');
       ]);
 
       // معالجة كل درس يحتوي على مجموعات صالحة
-      for (const lesson of lessonsWithSingleQuestionGroups) {
+      for (const Section of SectionsWithSingleQuestionGroups) {
         // اختيار مجموعات عشوائية من الدروس التي تحتوي على سؤال واحد
         const sampledGroups = await QuestionGroup.aggregate([
           { $match: { 
-            _id: { $in: lesson.groups.map(g => g._id) },
+            _id: { $in: Section.groups.map(g => g._id) },
             $expr: { $eq: [{ $size: '$questions' }, 1] } 
           }},
           { $sample: { size: numOfGroups } },
@@ -74,7 +74,7 @@ const Lesson = require('../../models/Lesson');
         // إعداد البيانات للإدخال
         const groupsToInsert = sampledGroups.map(group => ({
           ...group,
-          lesson: lesson._id,
+          Section: Section._id,
           questions: group.questions.map(question => ({
             ...question,
             choices: question.choices.map(choice => ({
@@ -92,7 +92,7 @@ const Lesson = require('../../models/Lesson');
       res.status(200).json({
         message: `تم نسخ ${totalCopied} مجموعة تحتوي على سؤال واحد بنجاح.`,
         totalCopied,
-        lessonsProcessed: lessonsWithSingleQuestionGroups.length,
+        SectionsProcessed: SectionsWithSingleQuestionGroups.length,
       });
     } catch (err) {
       res.status(500).json({

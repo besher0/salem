@@ -21,22 +21,32 @@ const videoSchema = new Schema(
         description: String,
       },
     ],
-    course: {
+    material: {
       type: Schema.Types.ObjectId,
       ref: 'Course',
       required: true,
     },
-    unit: {
+    section: {
       type: Schema.Types.ObjectId,
-      ref: 'Unit',
+      ref: 'Section',
       required: true,
     },
+
+    isFree: { type: Boolean, default: false }, // أول فيديو مجاني
+    order: { type: Number,  index: true  },       // ترتيب الفيديوهات
+    cacheVersion: { type: Number, default: 0 } 
   },
   { timestamps: true }
 );
 
+
+
+
 videoSchema.plugin(mongoosePaginate);
-videoSchema.index({ course: 1 });
-videoSchema.index({ unit: 1 });
+
+// فهارس على الحقول الجديدة
+videoSchema.index({ material: 1, order: 1 });
+videoSchema.index({ section: 1 });
+videoSchema.index({ order: 1 });
 
 module.exports = mongoose.model('Video', videoSchema);

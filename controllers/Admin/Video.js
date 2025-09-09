@@ -1,16 +1,16 @@
 const mongoose = require('mongoose');
 const Video = require('../../models/Video');
-const Course = require('../../models/Course');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const { default: axios } = require('axios');
-const Unit = require('../../models/Unit');
+const Section = require('../../models/Section');
+const Material = require('../../models/Material');
 
 // Create a new video
 exports.createVideo = [
   body('name').notEmpty().withMessage('اسم الفيديو مطلوب.'),
-  body('course').isMongoId().withMessage('معرف الدورة غير صالح.'),
-  body('unit').isMongoId().withMessage('معرف الوحدة غير صالح.'),
+  body('material').isMongoId().withMessage('معرف الدورة غير صالح.'),
+  body('Section').isMongoId().withMessage('معرف الوحدة غير صالح.'),
   body('video720.accessUrl')
     .optional()
     .isString()
@@ -27,36 +27,45 @@ exports.createVideo = [
     .optional()
     .isString()
     .withMessage('يجب أن يكون رابط التنزيل لفيديو 720 نصاً.'),
-
+    body('seekPoints')
+    .optional()
+    .isArray()
+    .withMessage('يجب أن تكون نقاط التمرير مصفوفة.'),
+  body('order')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('يجب أن يكون الترتيب عددًا صحيحًا أكبر من 0.'),
   async (req, res) => {
     try {
       await ensureIsAdmin(req.userId);
+      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      // Verify if the associated course exists
-      const courseExists = await Course.findById(req.body.course);
-      if (!courseExists) {
+         const { name, material, Section, video720, seekPoints, order } = req.body;
+
+      const materialExists = await Material.findById(req.body.material);
+      if (!materialExists) {
         return res
           .status(400)
           .json({ message: 'عذراً، لم يتم العثور على الدورة.' });
       }
 
-      // Verify if the associated unit exists
-      const unitExists = await Unit.findById(req.body.unit);
-      if (!unitExists) {
+      // Verify if the associated Section exists
+      const SectionExists = await Section.findById(req.body.section);
+      if (!SectionExists) {
         return res
           .status(400)
-          .json({ message: 'عذراً، لم يتم العثور على الوحدة.' });
+          .json({ message: 'عذراً، لم يتم العثور على القسم.' });
       }
 
-      if (unitExists.material.toString() !== courseExists.material.toString()) {
-        return res
-          .status(400)
-          .json({ message: 'الدورة والوحدة لا ينتميان لنفس المادة' });
-      }
+      // if (SectionExists.material.toString() !== materialExists.material.toString()) {
+      //   return res
+      //     .status(400)
+      //     .json({ message: 'الدورة والوحدة لا ينتميان لنفس المادة' });
+      // }
 
       // Process video720 information
       if (req.body.video720) {
@@ -64,14 +73,25 @@ exports.createVideo = [
         const videoPlayData = await axios.get(playDataUrl);
         req.body.video720.downloadUrl = videoPlayData?.data?.fallbackUrl;
       }
+      const videoCount = await Video.countDocuments({ section: Section });
+      const isFree = videoCount === 0;
 
-      const video = new Video(req.body);
-      await video.save();
+   const video = new Video({
+        name,
+        video720: finalVideo720,
+        seekPoints: seekPoints || [],
+        material,
+        section: Section,
+        isFree,
+        order: order || videoCount + 1, // تعيين ترتيب تلقائي إذا لم يُرسل
+        cacheVersion: 1
+      });
+            await video.save();
 
       // Return selected fields in the response
-      const { _id, name, video720, course, unit, seekPoints } = video;
+      // const { _id, name, video720, material, Section, seekPoints } = video;
       res.status(201).json({
-        video: { _id, name, video720, course, unit, seekPoints },
+        video: { _id, name, video720, material, Section, seekPoints },
       });
     } catch (err) {
       res
@@ -86,7 +106,7 @@ exports.getVideos = async (req, res) => {
   try {
     await ensureIsAdmin(req.userId);
     // Destructure pagination and filter parameters from the query string
-    const { page, limit, name, course, unit } = req.query;
+    const { page, limit, name, Material, Section } = req.query;
     const filter = {};
 
     // Filter based on video name using a case-insensitive regex
@@ -94,40 +114,40 @@ exports.getVideos = async (req, res) => {
       filter.name = { $regex: name, $options: 'i' };
     }
 
-    // Both course and unit ids are required for filtering in this scenario
-    if (!course || !unit) {
+    // Both subject and Section ids are required for filtering in this scenario
+    if (!Material || !Section) {
       return res.status(400).json({ message: 'معرف الدورة والوحدة مطلوبان.' });
     }
 
-    // Verify if the provided course exists
-    const courseExists = await Course.exists({ _id: course });
-    if (!courseExists) {
+    // Verify if the provided subject exists
+    const subjectExists = await Material.exists({ _id: Material });
+    if (!subjectExists) {
       return res
         .status(400)
         .json({ message: 'عذراً، لم يتم العثور على الدورة.' });
     }
 
-    // Verify if the provided unit exists
-    const unitExists = await Unit.exists({ _id: unit });
-    if (!unitExists) {
+    // Verify if the provided Section exists
+    const SectionExists = await Section.exists({ _id: Section });
+    if (!SectionExists) {
       return res
         .status(400)
         .json({ message: 'عذراً، لم يتم العثور على الوحدة.' });
     }
 
-    // Add filters for course and unit
-    filter.course = new mongoose.Types.ObjectId(course);
-    filter.unit = new mongoose.Types.ObjectId(unit);
+    // Add filters for subject and Section
+    filter.Material = new mongoose.Types.ObjectId(Material);
+    filter.Section = new mongoose.Types.ObjectId(Section);
 
     // Paginate videos based on filter and pagination options
     const videos = await Video.paginate(filter, {
       page: parseInt(page, 10) || 1,
       limit: parseInt(limit, 10) || 10,
       populate: [
-        { path: 'course', select: 'name description' },
-        { path: 'unit', select: 'name color' },
+        { path: 'Material', select: 'name description' },
+        { path: 'Section', select: 'name color' },
       ],
-      select: 'name video course unit video720 seekPoints',
+      select: 'name video Material Section video720 seekPoints',
     });
 
     res.status(200).json(videos);
@@ -234,7 +254,7 @@ exports.updateVideo = [
         req.params.id,
         updateData,
         { new: true }
-      ).select('name seekPoints course video720');
+      ).select('name seekPoints material video720');
 
       if (!video) {
         return res.status(404).json({ error: 'الفيديو غير موجود.' });
@@ -355,3 +375,122 @@ exports.deleteVideo = [
     }
   },
 ];
+
+
+// ===== Custom Additions =====
+
+// Refresh videos list (without downloading)
+exports.refreshVideos = async (req, res) => {
+  try {
+    const videos = await Video.find({ section: req.params.sectionId }).sort({ order: 1 });
+    return res.json({ success: true, videos });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Delete downloaded video (reset state)
+exports.deleteDownload = async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id);
+    if (!video) return res.status(404).json({ success: false, message: "Video not found" });
+    video.isDownloaded = false;
+    await video.save();
+    return res.json({ success: true, message: "Download deleted" });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Re-download video (simulate re-flagging download)
+exports.reDownload = async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id);
+    if (!video) return res.status(404).json({ success: false, message: "Video not found" });
+    video.isDownloaded = true;
+    await video.save();
+    return res.json({ success: true, message: "Video re-downloaded" });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.reorderVideos = async (req, res) => {
+  try {
+    await ensureIsAdmin(req.userId);
+    const { videos,sectionId } = req.body; // توقع مصفوفة: [{ videoId, order }, ...]
+
+    // التحقق من صحة المدخلات
+    if (!Array.isArray(videos) || videos.length === 0) {
+      return res.status(400).json({ message: 'يجب إرسال مصفوفة غير فارغة من الفيديوهات.' });
+    }
+
+        if (sectionId) {
+      const sectionExists = await Section.findById(sectionId);
+      if (!sectionExists) return res.status(404).json({ message: 'القسم غير موجود.' });
+      filter.section = sectionId;
+    }
+
+    // التحقق من أن جميع videoId موجودة
+    const videoIds = videos.map(v => v.videoId);
+    const existingVideos = await Video.find({ _id: { $in: videoIds } }).select('_id');
+    if (existingVideos.length !== videoIds.length) {
+      return res.status(400).json({ message: 'بعض معرفات الفيديوهات غير موجودة.' });
+    }
+
+    // التحقق من أن قيم order فريدة ومتسلسلة
+    const orders = videos.map(v => v.order);
+    const uniqueOrders = new Set(orders);
+    if (uniqueOrders.size !== orders.length) {
+      return res.status(400).json({ message: 'قيم الترتيب يجب أن تكون فريدة.' });
+    }
+
+    // التحقق من أن قيم order تبدأ من 1 وتكون متسلسلة
+    const sortedOrders = [...uniqueOrders].sort((a, b) => a - b);
+    for (let i = 0; i < sortedOrders.length; i++) {
+      if (sortedOrders[i] !== i + 1) {
+        return res.status(400).json({ message: 'قيم الترتيب يجب أن تكون متسلسلة وتبدأ من 1.' });
+      }
+    }
+
+    // تحديث حقل order لكل فيديو
+    const bulkOps = videos.map(({ videoId, order }) => ({
+      updateOne: {
+        filter: { _id: videoId },
+        update: { $set: { order } }
+      }
+    }));
+
+    await Video.bulkWrite(bulkOps);
+
+    res.status(200).json({ message: 'تم إعادة ترتيب الفيديوهات بنجاح.' });
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء إعادة ترتيب الفيديوهات.' });
+  }
+};
+
+exports.updateVideoFreeStatus = async (req, res) => {
+  try {
+    await ensureIsAdmin(req, res, () => {}); // التحقق من صلاحيات الإداري
+    const { videoId, isFree } = req.body;
+
+    // التحقق من صحة المدخلات
+    if (!videoId || typeof isFree !== 'boolean') {
+      return res.status(400).json({ message: 'يجب إرسال معرف الفيديو وقيمة isFree (true/false).' });
+    }
+
+    // التحقق من وجود الفيديو
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ message: 'الفيديو غير موجود.' });
+    }
+
+    // تحديث حالة isFree
+    video.isFree = isFree;
+    await video.save();
+
+    res.status(200).json({ message: 'تم تحديث حالة الفيديو بنجاح.', video });
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء تحديث حالة الفيديو.' });
+  }
+};

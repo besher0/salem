@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
-const Lecture = require('../../models/Lecture');
+const files = require('../../models/file');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const Material = require('../../models/Material');
 
 // إنشاء محاضرة جديدة
-exports.createLecture = [
+exports.createfiles = [
   body('num')
     .isInt({ min: 1 })
     .withMessage('يجب إدخال رقم محاضرة صحيح أكبر من الصفر.'),
@@ -35,20 +35,25 @@ exports.createLecture = [
           .json({ message: 'عذراً، لم يتم العثور على المادة.' });
       }
 
+      if (!['أوراق ذهبية', 'نوط', 'نموذج وزاري'].includes(req.body.type)) {
+    return res.status(400).json({ message: 'نوع الملف غير صالح' });
+  }
       // إنشاء المحاضرة
-      const lecture = new Lecture({
+      const files = new files({
         num: req.body.num,
         material: req.body.material,
         file: req.body.file || {},
+        type
       });
 
-      await lecture.save();
+      await files.save();
 
       res.status(201).json({
-        _id: lecture._id,
-        num: lecture.num,
-        material: lecture.material,
-        file: lecture.file,
+        _id: files._id,
+        num: files.num,
+        material: files.material,
+        file: files.file,
+        type:files.type
       });
     } catch (err) {
       if (err.code === 11000) {
@@ -63,7 +68,7 @@ exports.createLecture = [
   },
 ];
 
-exports.updateLecture = [
+exports.updatefiles = [
   param('id').isMongoId().withMessage('معرف المحاضرة غير صحيح.'),
   body('num')
     .optional()
@@ -102,8 +107,8 @@ exports.updateLecture = [
       }
 
       // البحث عن المحاضرة الحالية
-      const existingLecture = await Lecture.findById(req.params.id);
-      if (!existingLecture) {
+      const existingfiles = await files.findById(req.params.id);
+      if (!existingfiles) {
         return res.status(404).json({ error: 'المحاضرة غير موجودة.' });
       }
 
@@ -115,10 +120,10 @@ exports.updateLecture = [
         updateData.num = req.body.num;
         
         // التحقق من عدم تكرار الرقم في نفس المادة
-        const duplicate = await Lecture.findOne({
-          material: existingLecture.material,
+        const duplicate = await files.findOne({
+          material: existingfiles.material,
           num: req.body.num,
-          _id: { $ne: existingLecture._id }
+          _id: { $ne: existingfiles._id }
         });
         
         if (duplicate) {
@@ -140,22 +145,22 @@ exports.updateLecture = [
       // معالجة تحديث الملف
       if (req.body.file !== undefined) {
         // تحديد الملف القديم للحذف
-        if (existingLecture.file?.accessUrl) {
-          bunnyDeletions.push(existingLecture.file.accessUrl);
+        if (existingfiles.file?.accessUrl) {
+          bunnyDeletions.push(existingfiles.file.accessUrl);
         }
         
         if (req.body.file === null) {
           updateData.file = null;
         } else {
           updateData.file = { 
-            ...existingLecture.file.toObject(), 
+            ...existingfiles.file.toObject(), 
             ...req.body.file 
           };
         }
       }
 
       // تحديث البيانات في قاعدة البيانات
-      const updatedLecture = await Lecture.findByIdAndUpdate(
+      const updatedfiles = await files.findByIdAndUpdate(
         req.params.id,
         updateData,
         { new: true, runValidators: true }
@@ -182,7 +187,7 @@ exports.updateLecture = [
       }
 
       res.status(200).json({
-        lecture: updatedLecture,
+        files: updatedfiles,
         bunnyDeletions: deletionResults
       });
 
@@ -200,9 +205,8 @@ exports.updateLecture = [
   },
 ];
 
-// controllers/lectureController.js
 
-exports.getLecturesByMaterial = [
+exports.getfilessByMaterial = [
   param('materialId').isMongoId().withMessage('معرف المادة غير صحيح.'),
   async (req, res) => {
     try {
@@ -221,13 +225,13 @@ exports.getLecturesByMaterial = [
           .status(400)
           .json({ message: 'عذراً، لم يتم العثور على المادة.' });
       }
-      const lectures = await Lecture.find({ material: req.params.materialId })
+      const filess = await files.find({ material: req.params.materialId })
         .select('num material file')
         .sort({ num: 1 })
         .lean();
 
       res.status(200).json({
-        lectures,
+        filess,
       });
     } catch (err) {
       res.status(500).json({
@@ -237,7 +241,7 @@ exports.getLecturesByMaterial = [
   },
 ];
 // حذف محاضرة
-exports.deleteLecture = [
+exports.deletefiles = [
   param('id').isMongoId().withMessage('معرف المحاضرة غير صحيح.'),
   async (req, res) => {
     try {
@@ -248,21 +252,21 @@ exports.deleteLecture = [
       }
 
       // البحث عن المحاضرة
-      const lecture = await Lecture.findById(req.params.id);
-      if (!lecture) {
+      const files = await files.findById(req.params.id);
+      if (!files) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على المحاضرة.' });
       }
 
       // حذف المحاضرة
-      await Lecture.findByIdAndDelete(req.params.id);
+      await files.findByIdAndDelete(req.params.id);
 
       res.status(200).json({
         message: 'تم حذف المحاضرة بنجاح.',
-        deletedLecture: {
-          _id: lecture._id,
-          num: lecture.num,
+        deletedfiles: {
+          _id: files._id,
+          num: files.num,
         },
       });
     } catch (err) {

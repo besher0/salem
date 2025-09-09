@@ -4,7 +4,7 @@ const { shuffleArray } = require('../../util/shuffleArray');
 const Student = require('../../models/Student');
 const httpStatus = require('http-status-codes');
 const mongoose = require('mongoose');
-const { Material, Unit, Lesson, FreeQuestionGroup } = require('../../models');
+const { Material, Section, FreeQuestionGroup } = require('../../models');
 
 exports.getFreeQuestionsByMaterial = async (req, res) => {
   try {
@@ -30,8 +30,8 @@ exports.getFreeQuestionsByMaterial = async (req, res) => {
     }
 
     // Efficiently gather all related lesson IDs
-    const unitIds = await Unit.find({ material }).distinct('_id');
-    const lessonIds = await Lesson.find({ unit: { $in: unitIds } }).distinct(
+    const SectionIds = await Section.find({ material }).distinct('_id');
+    const lessonIds = await Lesson.find({ Section: { $in: SectionIds } }).distinct(
       '_id'
     );
 

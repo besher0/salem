@@ -7,15 +7,13 @@ const freeQuestionGroupSchema = new Schema(
     paragraph: String,
     images: [
       {
-        filename: String,
+        name: String,
         accessUrl: String,
       },
     ],
-    lesson: {
-      type: Schema.Types.ObjectId,
-      ref: 'Lesson',
-      required: true,
-    },
+material: { type: Schema.Types.ObjectId, ref: 'Material', required: true },
+section:  { type: Schema.Types.ObjectId, ref: 'Section', required: true },
+
     questions: [
       {
         isEnglish: {
@@ -47,7 +45,7 @@ const freeQuestionGroupSchema = new Schema(
         },
         infoImages: [
           {
-            filename: String,
+            name: String,
             accessUrl: String,
           },
         ],

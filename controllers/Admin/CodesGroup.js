@@ -6,6 +6,7 @@ const {
 const CodesGroup = require('../../models/CodesGroup');
 const Material = require('../../models/Material');
 const Course = require('../../models/Course');
+const {Section}=('../../models/Section.js')
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { v4: uuidv4 } = require('uuid');
 const Student = require('../../models/Student');
@@ -24,7 +25,7 @@ exports.createCodesGroup = [
     .withMessage('المواد مع الأسئلة يجب أن تكون في شكل قائمة.')
     .custom((value) => value.every((id) => mongoose.Types.ObjectId.isValid(id)))
     .withMessage('يحتوي أحد العناصر على معرف مادة غير صحيح.'),
-  body('materialsWithLectures')
+  body('materialsWithFiles')
     .optional()
     .isArray()
     .withMessage('المواد مع المحاضرات يجب أن تكون في شكل قائمة.')
@@ -55,15 +56,15 @@ exports.createCodesGroup = [
       const {
         name,
         materialsWithQuestions = [],
-        materialsWithLectures = [],
-        courses = [],
+        materialsWithFiles = [],
+        sections = [],
         codeCount,
         expiration,
       } = req.body;
       // Verify materials exist
       const allMaterials = [
         ...materialsWithQuestions,
-        ...materialsWithLectures,
+        ...materialsWithFiles,
       ];
       if (allMaterials.length > 0) {
         const existingMaterials = await Material.countDocuments({
@@ -75,12 +76,10 @@ exports.createCodesGroup = [
       }
 
       // Verify courses exist
-      if (courses.length > 0) {
-        const existingCourses = await Course.countDocuments({
-          _id: { $in: courses },
-        });
-        if (existingCourses !== courses.length) {
-          return res.status(404).json({ error: 'بعض الدورات غير موجودة.' });
+  if (sections.length > 0) {
+        const sectionsExist = await Section.find({ _id: { $in: sections } });
+        if (sectionsExist.length !== sections.length) {
+          return res.status(404).json({ error: 'Some sections not found' });
         }
       }
 
@@ -94,7 +93,7 @@ exports.createCodesGroup = [
         name,
         codes,
         materialsWithQuestions,
-        materialsWithLectures,
+        materialsWithFiles,
         courses,
         expiration: new Date(expiration),
       });
@@ -155,7 +154,7 @@ exports.getCodesGroups = [
       if (material) {
         filter.$or = [
           { materialsWithQuestions: material },
-          { materialsWithLectures: material },
+          { materialsWithFiles: material },
         ];
       }
 
@@ -177,7 +176,7 @@ exports.getCodesGroups = [
             select: 'name',
           },
           {
-            path: 'materialsWithLectures',
+            path: 'materialsWithFiles',
             select: 'name',
           },
           {
@@ -196,7 +195,7 @@ exports.getCodesGroups = [
           },
         ],
         select:
-          'name codes expiration materialsWithQuestions materialsWithLectures courses createdAt',
+          'name codes expiration materialsWithQuestions materialsWithFiles courses createdAt',
       });
 
       // Format response with usage statistics
@@ -213,7 +212,7 @@ exports.getCodesGroups = [
             name: material.name,
           })
         ),
-        materialsWithLectures: group.materialsWithLectures.map((material) => ({
+        materialsWithFiles: group.materialsWithFiles.map((material) => ({
           _id: material._id,
           name: material.name,
         })),

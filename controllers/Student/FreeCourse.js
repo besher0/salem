@@ -47,43 +47,43 @@ exports.getFreeCourses = [
   },
 ];
 
-exports.getFreeVideos = [
-  query('course')
-    .isMongoId()
-    .withMessage('معرف الدورة يجب أن يكون معرفاً نصاً'),
-  query('page')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('يجب أن يكون رقم الصفحة عدداً صحيحاً موجباً')
-    .toInt(),
-  query('limit')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('يجب أن يكون الحد الأقصى للعناصر عدداً صحيحاً موجباً')
-    .toInt(),
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+// exports.getFreeVideos = [
+//   query('course')
+//     .isMongoId()
+//     .withMessage('معرف الدورة يجب أن يكون معرفاً نصاً'),
+//   query('page')
+//     .optional()
+//     .isInt({ min: 1 })
+//     .withMessage('يجب أن يكون رقم الصفحة عدداً صحيحاً موجباً')
+//     .toInt(),
+//   query('limit')
+//     .optional()
+//     .isInt({ min: 1 })
+//     .withMessage('يجب أن يكون الحد الأقصى للعناصر عدداً صحيحاً موجباً')
+//     .toInt(),
+//   async (req, res) => {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({ errors: errors.array() });
+//     }
 
-    try {
-      const { page, limit, course } = req.query;
-      // Get videos for the course
-      const videos = await Video.paginate(
-        { course },
-        {
-          page: parseInt(page) || 1,
-          limit: parseInt(limit) || 10,
-          select: '-video720 -__v -createdAt -updatedAt -course -seekPoints',
-        }
-      );
+//     try {
+//       const { page, limit, course } = req.query;
+//       // Get videos for the course
+//       const videos = await Video.paginate(
+//         { course },
+//         {
+//           page: parseInt(page) || 1,
+//           limit: parseInt(limit) || 10,
+//           select: '-video720 -__v -createdAt -updatedAt -course -seekPoints',
+//         }
+//       );
 
-      res.status(200).json(videos);
-    } catch (err) {
-      res.status(err.statusCode || 500).json({
-        error: err.message || 'حدث خطأ في الخادم.',
-      });
-    }
-  },
-];
+//       res.status(200).json(videos);
+//     } catch (err) {
+//       res.status(err.statusCode || 500).json({
+//         error: err.message || 'حدث خطأ في الخادم.',
+//       });
+//     }
+//   },
+// ];
