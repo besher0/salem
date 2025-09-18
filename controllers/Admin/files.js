@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const files = require('../../models/file');
+const Files = require('../../models/File');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const Material = require('../../models/Material');
@@ -39,11 +39,11 @@ exports.createfiles = [
     return res.status(400).json({ message: 'نوع الملف غير صالح' });
   }
       // إنشاء المحاضرة
-      const files = new files({
+      const files = new Files({
         num: req.body.num,
         material: req.body.material,
         file: req.body.file || {},
-        type
+        type:req.body.type
       });
 
       await files.save();
@@ -107,7 +107,7 @@ exports.updatefiles = [
       }
 
       // البحث عن المحاضرة الحالية
-      const existingfiles = await files.findById(req.params.id);
+      const existingfiles = await Files.findById(req.params.id);
       if (!existingfiles) {
         return res.status(404).json({ error: 'المحاضرة غير موجودة.' });
       }
@@ -120,7 +120,7 @@ exports.updatefiles = [
         updateData.num = req.body.num;
         
         // التحقق من عدم تكرار الرقم في نفس المادة
-        const duplicate = await files.findOne({
+        const duplicate = await Files.findOne({
           material: existingfiles.material,
           num: req.body.num,
           _id: { $ne: existingfiles._id }
@@ -160,7 +160,7 @@ exports.updatefiles = [
       }
 
       // تحديث البيانات في قاعدة البيانات
-      const updatedfiles = await files.findByIdAndUpdate(
+      const updatedfiles = await Files.findByIdAndUpdate(
         req.params.id,
         updateData,
         { new: true, runValidators: true }
@@ -225,8 +225,8 @@ exports.getfilessByMaterial = [
           .status(400)
           .json({ message: 'عذراً، لم يتم العثور على المادة.' });
       }
-      const filess = await files.find({ material: req.params.materialId })
-        .select('num material file')
+      const filess = await Files.find({ material: req.params.materialId })
+        .select('num material file type')
         .sort({ num: 1 })
         .lean();
 
@@ -251,8 +251,7 @@ exports.deletefiles = [
         return res.status(400).json({ errors: errors.array() });
       }
 
-      // البحث عن المحاضرة
-      const files = await files.findById(req.params.id);
+      const files = await Files.findById(req.params.id);
       if (!files) {
         return res
           .status(404)
@@ -260,7 +259,7 @@ exports.deletefiles = [
       }
 
       // حذف المحاضرة
-      await files.findByIdAndDelete(req.params.id);
+      await Files.findByIdAndDelete(req.params.id);
 
       res.status(200).json({
         message: 'تم حذف المحاضرة بنجاح.',

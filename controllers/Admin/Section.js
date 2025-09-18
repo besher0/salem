@@ -36,9 +36,9 @@ exports.createSection = [
           .json({ message: 'عذراً، لم يتم العثور على المادة.' });
       }
 
-      const Section = new Section(req.body);
-      await Section.save();
-      const { _id, name, color, icon, material } = Section;
+      const section = new Section(req.body);
+      await section.save();
+      const { _id, name, color, icon, material } = section;
       res.status(201).json({
         Section: {
           _id,
@@ -114,8 +114,8 @@ exports.deleteSection = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const Section = await Section.findByIdAndDelete(req.params.id);
-      if (!Section) {
+      const section = await Section.findByIdAndDelete(req.params.id);
+      if (!section) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الوحدة.' });
@@ -155,8 +155,8 @@ exports.updateSection = [
       }
 
       // Check if Section exists
-      const Section = await Section.findById(req.params.id);
-      if (!Section) {
+      const section = await Section.findById(req.params.id);
+      if (!section) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الوحدة.' });

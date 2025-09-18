@@ -96,21 +96,21 @@ router.put('/files/:id', multerGlobal, isAuth, updatefiles);
 router.delete('/files/:id', multerGlobal, isAuth, deletefiles);
 
 // File (NEW alias replacing 'files')
-router.post('/file', multerGlobal, isAuth, createfiles);
-router.get('/files/:materialId', multerGlobal, isAuth, getfilessByMaterial);
-router.put('/file/:id', multerGlobal, isAuth, updatefiles);
-router.delete('/file/:id', multerGlobal, isAuth, deletefiles);
+// router.post('/file', multerGlobal, isAuth, createfiles);
+// router.get('/files/:materialId', multerGlobal, isAuth, getfilessByMaterial);
+// router.put('/file/:id', multerGlobal, isAuth, updatefiles);
+// router.delete('/file/:id', multerGlobal, isAuth, deletefiles);
 
 // Section (original)
-router.post('/Section', multerGlobal, isAuth, createSection);
+// router.post('/Section', multerGlobal, isAuth, createSection);
 router.put('/Section/:id', multerGlobal, isAuth, updateSection);
 router.delete('/Section/:id', multerGlobal, isAuth, deleteSection);
 
 // Section (NEW alias replacing 'Section')
 router.post('/section', multerGlobal, isAuth, createSection);
-router.get('/sections', multerGlobal, isAuth, getSections);
-router.put('/section/:id', multerGlobal, isAuth, updateSection);
-router.delete('/section/:id', multerGlobal, isAuth, deleteSection);
+router.get('/Sections', multerGlobal, isAuth, getSections);
+// router.put('/section/:id', multerGlobal, isAuth, updateSection);
+// router.delete('/section/:id', multerGlobal, isAuth, deleteSection);
 
 ;
 
