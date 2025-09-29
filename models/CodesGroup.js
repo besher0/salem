@@ -38,6 +38,16 @@ const codesGroupSchema = new Schema(
         required: true,
       },
     ],
+    // Unified field for granting access to files of a material
+    materialsWithFiles: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Material',
+      },
+    ],
+    // Backwards-compatible alias for old typo used across student controllers
+    // Some controllers reference `materialsWithfiless` (typo). Provide a virtual
+    // so both names map to the same underlying data.
     materialsWithLectures: [
       {
         type: Schema.Types.ObjectId,
@@ -45,16 +55,17 @@ const codesGroupSchema = new Schema(
         required: true,
       },
     ],
-    // courses: [
-    //   {
-    //     type: Schema.Types.ObjectId,
-    //     ref: 'Course',
-    //   },
-    // ],
-      sections: [{ 
-        type: mongoose.Schema.Types.ObjectId,
-         ref: 'Section' 
-        }],
+    // Legacy sections field (backward compatibility):
+    sections: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Section' }],
+    // New precise per-type section grants:
+    sectionsForVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Section' }],
+    sectionsForQuestions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Section' }],
+      // Access flags indicate what this codes group grants when redeemed
+      access: {
+        videos: { type: Boolean, default: false },
+        questions: { type: Boolean, default: false },
+        files: { type: Boolean, default: false },
+      },
   },
   { timestamps: true }
 );
@@ -80,6 +91,8 @@ codesGroupSchema.index({
 });
 codesGroupSchema.index({ name: 'text' });
 codesGroupSchema.index({ createdAt: -1 });
+codesGroupSchema.index({ sectionsForVideos: 1 });
+codesGroupSchema.index({ sectionsForQuestions: 1 });
 
 // Compound index for materials appearing in both arrays
 codesGroupSchema.plugin(mongoosePaginate);
@@ -98,5 +111,20 @@ codesGroupSchema.methods = {
     );
   },
 };
+
+// Virtual alias for backward compatibility with controllers that expect the
+// misspelled `materialsWithfiless` field. This exposes the same array and
+// allows pushing/setting via either name.
+codesGroupSchema.virtual('materialsWithfiless')
+  .get(function () {
+    return this.materialsWithFiles;
+  })
+  .set(function (v) {
+    this.materialsWithFiles = v;
+  });
+
+// Ensure virtuals are included when converting to objects/JSON
+codesGroupSchema.set('toObject', { virtuals: true });
+codesGroupSchema.set('toJSON', { virtuals: true });
 
 module.exports = mongoose.model('CodesGroup', codesGroupSchema);

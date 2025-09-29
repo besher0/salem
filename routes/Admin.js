@@ -30,6 +30,7 @@ const {
   exportCodesPDF,
   exportCodeCardsPDF,
 } = require('../controllers/Admin/CodesGroup');
+const { generateCodes } = require('../controllers/Admin/GenerateCodes');
 
 // Questions & Groups
 const { copyQuestionsToFree } = require('../controllers/Admin/FreeQuestion');
@@ -149,6 +150,7 @@ router.post('/codesGroup', multerGlobal, isAuth, createCodesGroup);
 router.get('/codesGroups', multerGlobal, isAuth, getCodesGroups);
 router.get('/codes/:id', multerGlobal, isAuth, getCodesFromGroup);
 router.delete('/codesGroup/:id', multerGlobal, isAuth, deleteCodesGroup);
+router.post('/generateCodes', multerGlobal, isAuth, generateCodes);
 // NOTE: preserved original export path to avoid breaking clients
 router.get('/codesGroup/:id/export-pdf', multerGlobal, exportCodeCardsPDF);
 

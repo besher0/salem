@@ -63,7 +63,7 @@ exports.addFavoriteQuestionGroup = [
           codesGroup.materialsWithQuestions.some(
             (m) => m.toString() === materialId
           ) ||
-          codesGroup.materialsWithfiless.some(
+          codesGroup.materialsWithFiles.some(
             (m) => m.toString() === materialId
           );
 

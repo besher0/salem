@@ -31,7 +31,7 @@ exports.redeemCode = [
           'codes.$': 1,
           expiration: 1,
           materialsWithQuestions: 1,
-          materialsWithfiless: 1,
+          materialsWithFiles: 1,
           courses: 1,
         }
       )
@@ -41,7 +41,7 @@ exports.redeemCode = [
             select: 'name color icon',
           },
           {
-            path: 'materialsWithfiless',
+            path: 'materialsWithFiles',
             select: 'name color icon',
           },
           {
@@ -114,7 +114,9 @@ exports.redeemCode = [
         data: {
           code,
           materialsWithQuestions: codesGroup.materialsWithQuestions,
-          materialsWithfiless: codesGroup.materialsWithfiless,
+          // return both keys for backward compatibility
+          materialsWithFiles: codesGroup.materialsWithFiles,
+          materialsWithfiless: codesGroup.materialsWithFiles,
           courses: codesGroup.courses,
           expiration: codesGroup.expiration,
         },
@@ -133,14 +135,14 @@ exports.getCodesInfo = async (req, res) => {
 
     const student = await Student.findById(userId).populate({
       path: 'redeemedCodes.codesGroup',
-      select: 'expiration materialsWithQuestions materialsWithfiless courses',
+      select: 'expiration materialsWithQuestions materialsWithFiles courses',
       populate: [
         {
           path: 'materialsWithQuestions',
           select: 'name color icon',
         },
         {
-          path: 'materialsWithfiless',
+          path: 'materialsWithFiles',
           select: 'name color icon',
         },
         {
@@ -162,7 +164,9 @@ exports.getCodesInfo = async (req, res) => {
       codesGroup: {
         ...redemption.codesGroup.toObject(),
         materialsWithQuestions: redemption.codesGroup.materialsWithQuestions,
-        materialsWithfiless: redemption.codesGroup.materialsWithfiless,
+        // include both keys pointing to the same data
+        materialsWithFiles: redemption.codesGroup.materialsWithFiles,
+        materialsWithfiless: redemption.codesGroup.materialsWithFiles,
         courses: redemption.codesGroup.courses.map((course) => ({
           ...course.toObject(),
           material: course.material,

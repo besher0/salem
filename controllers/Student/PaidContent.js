@@ -7,6 +7,7 @@ const Course = require('../../models/Course');
 const Video = require('../../models/Video');
 const QuestionGroup = require('../../models/QuestionGroup');
 const Section = require('../../models/Section');
+const FreeQuestionGroup = require('../../models/FreeQuestionGroup');
 
 exports.getAccessibleMaterials = async (req, res) => {
   try {
@@ -28,13 +29,13 @@ exports.getAccessibleMaterials = async (req, res) => {
         expiration: { $gt: now },
         'codes.value': redemption.code,
         'codes.isUsed': true,
-      }).select('materialsWithQuestions materialsWithfiless');
+  }).select('materialsWithQuestions materialsWithFiles');
 
       if (codesGroup) {
         codesGroup.materialsWithQuestions.forEach((id) =>
           questionMaterialIds.add(id.toString())
         );
-        codesGroup.materialsWithfiless.forEach((id) =>
+        codesGroup.materialsWithFiles.forEach((id) =>
           filesMaterialIds.add(id.toString())
         );
       }
@@ -49,7 +50,7 @@ exports.getAccessibleMaterials = async (req, res) => {
     );
 
     // Fetch materials in parallel
-    const [materialsWithQuestions, materialsWithfiless] = await Promise.all([
+  const [materialsWithQuestions, materialsWithFiles] = await Promise.all([
       Material.find({ _id: { $in: questionIdsArray } })
         .select('-__v -createdAt -updatedAt')
         .lean(),
@@ -61,10 +62,10 @@ exports.getAccessibleMaterials = async (req, res) => {
 
     res.status(200).json({
       materialsWithQuestions,
-      materialsWithfiless,
+      materialsWithFiles,
       count: {
         questions: materialsWithQuestions.length,
-        filess: materialsWithfiless.length,
+        filess: materialsWithFiles.length,
       },
     });
   } catch (err) {
@@ -80,8 +81,47 @@ exports.getAccessibleQuestions = async (req, res) => {
     if (!material || !section)
       return res.status(400).json({ success: false, message: 'material & section مطلوبة' });
 
+    // Validate student and codes
+    const student = await Student.findById(req.userId).select('redeemedCodes').lean();
+    if (!student) return res.status(404).json({ success: false, message: 'الطالب غير موجود' });
+
+    const now = new Date();
+    const validCodes = await CodesGroup.find({
+      _id: { $in: (student.redeemedCodes || []).map(rc => rc.codesGroup) },
+      expiration: { $gt: now },
+      'codes.value': { $in: (student.redeemedCodes || []).map(rc => rc.code) },
+      'codes.isUsed': true,
+    }).select('materialsWithQuestions sections sectionsForQuestions access').lean();
+
+    const hasSectionQuestionsAccess = validCodes.some(g => g.access?.questions && (
+      (g.sectionsForQuestions || []).some(s => s.toString() === section) ||
+      (g.sections || []).some(s => s.toString() === section) // legacy fallback
+    ));
+    const hasMaterialQuestionsAccess = validCodes.some(g => (g.materialsWithQuestions || []).some(m => m.toString() === material));
+
+    if (!hasSectionQuestionsAccess && !hasMaterialQuestionsAccess) {
+      // Fallback to free questions for this section (up to 5)
+      const match = {
+        material: new mongoose.Types.ObjectId(material),
+        section: new mongoose.Types.ObjectId(section),
+      };
+      const MAX_PER_SECTION = 5;
+      const freeGroups = await FreeQuestionGroup.aggregate([
+        { $match: match },
+        { $sample: { size: MAX_PER_SECTION } },
+        { $project: { __v: 0 } },
+      ]);
+
+      const totalAvailable = await FreeQuestionGroup.countDocuments(match);
+      return res.json({
+        success: true,
+        data: freeGroups,
+        meta: { freeFallback: true, perSectionMax: MAX_PER_SECTION, count: freeGroups.length, totalAvailable },
+      });
+    }
+
     const groups = await QuestionGroup.find({ material, section }).lean();
-    return res.json({ success: true, data: groups });
+    return res.json({ success: true, data: groups, meta: { hasFullAccess: true, count: groups.length } });
   } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
 };
 
@@ -268,7 +308,7 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
       'codes.isUsed': true,
       $or: [
         { materialsWithQuestions: materialId },
-        { materialsWithfiless: materialId },
+        { materialsWithFiles: materialId },
       ],
     }));
 
@@ -398,17 +438,56 @@ exports.getExamByMaterial = async (req, res) => {
   }
 }
 exports.getVideosByMaterialSection = async (req, res) => {
-  const { material, section, page = 1, limit = 20 } = req.query;
-  if (!material || !section) return res.status(400).json({ message: 'material & section مطلوبة' });
+  try {
+    const { material, section, page = 1, limit = 20 } = req.query;
+    if (!material || !section) return res.status(400).json({ message: 'material & section مطلوبة' });
 
-  const q = { material, section };
-  const count = await Video.countDocuments(q);
-  const docs = await Video.find(q)
-    .sort({ order: 1, createdAt: -1 })
-    .skip((+page-1)*+limit)
-    .limit(+limit);
+    // Check access: either section-level videos access OR material-level legacy videos access
+    const student = await Student.findById(req.userId).select('redeemedCodes').lean();
+    if (!student) return res.status(404).json({ message: 'الطالب غير موجود' });
 
-  res.json({ docs, totalDocs: count, page: +page, limit: +limit, totalPages: Math.ceil(count/+limit) });
+    const now = new Date();
+    const validCodes = await CodesGroup.find({
+      _id: { $in: (student.redeemedCodes || []).map(rc => rc.codesGroup) },
+      expiration: { $gt: now },
+      'codes.value': { $in: (student.redeemedCodes || []).map(rc => rc.code) },
+      'codes.isUsed': true,
+  }).select('materialsWithLectures materialsWithFiles sections sectionsForVideos access').lean();
+
+    // Allow if: access.videos + sections contains this section
+    const hasSectionVideoAccess = validCodes.some(g => g.access?.videos && (
+      (g.sectionsForVideos || []).some(s => s.toString() === section) ||
+      (g.sections || []).some(s => s.toString() === section)
+    ));
+    // Legacy material-level videos access: via materialsWithLectures (preferred), or fallback to materialsWithFiles if used for videos
+    const hasMaterialVideoAccess = validCodes.some(g =>
+      (g.materialsWithLectures || []).some(m => m.toString() === material) ||
+      (g.materialsWithFiles || []).some(m => m.toString() === material)
+    );
+
+    const q = { material, section };
+
+    if (!hasSectionVideoAccess && !hasMaterialVideoAccess) {
+      // Return only free videos for this section
+      const count = await Video.countDocuments({ ...q, isFree: true });
+      const docs = await Video.find({ ...q, isFree: true })
+        .sort({ order: 1, createdAt: -1 })
+        .skip((+page - 1) * +limit)
+        .limit(+limit);
+      return res.json({ docs, totalDocs: count, page: +page, limit: +limit, totalPages: Math.ceil(count / +limit), hasFullAccess: false });
+    }
+
+    // Full access
+    const count = await Video.countDocuments(q);
+    const docs = await Video.find(q)
+      .sort({ order: 1, createdAt: -1 })
+      .skip((+page - 1) * +limit)
+      .limit(+limit);
+    return res.json({ docs, totalDocs: count, page: +page, limit: +limit, totalPages: Math.ceil(count / +limit), hasFullAccess: true });
+  } catch (e) {
+    console.error('Error in getVideosByMaterialSection:', e);
+    return res.status(500).json({ message: e.message });
+  }
 };
 
 
@@ -421,34 +500,45 @@ exports.getVideos = async (req, res) => {
     // جلب مجموعات الرموز المستردة التي لا تزال صالحة
     const validCodes = await CodesGroup.find({
       'codes.value': { $in: redeemedCodes.map(c => c.code) },
+      'codes.isUsed': true,
       expiration: { $gte: new Date() }
-    }).lean();
+  }).select('sections sectionsForVideos access materialsWithLectures materialsWithFiles').lean();
 
-    // استخراج المواد المرتبطة بالرموز المستردة
-    const accessibleMaterials = validCodes.flatMap(group => group.materialsWithQuestions || []).map(id => id.toString());
-    const accessibleLectures = validCodes.flatMap(group => group.materialsWithfiless || []).map(id => id.toString());
-    const accessibleMaterialsSet = new Set([...accessibleMaterials, ...accessibleLectures]);
+    // السماح للوصول للفيديوهات فقط عبر:
+    // 1) كود قسم للفيديوهات: access.videos + sections
+    // 2) وصول قديم على مستوى المادة للفيديوهات: materialsWithLectures
+    // 3) قبول materialsWithFiles كبديل قديم إذا كان يُستخدم للفيديوهات
+    const allowedSectionIds = new Set(
+      validCodes
+        .filter(g => g.access?.videos)
+        .flatMap(g => ([...(g.sectionsForVideos || []), ...(g.sections || [])].map(s => s.toString())))
+    );
+    const allowedMaterialIds = new Set([
+      ...validCodes.flatMap(g => (g.materialsWithLectures || []).map(m => m.toString())),
+      ...validCodes.flatMap(g => (g.materialsWithFiles || []).map(m => m.toString()))
+    ]);
 
-    let videos;
-    if (accessibleMaterialsSet.size > 0) {
-      // إذا كان لديه رموز مفعلة، جلب كل الفيديوهات المرتبطة بالمواد المسموح بها
-      videos = await Video.find({
-        material: { $in: Array.from(accessibleMaterialsSet) }
-      })
-        .populate('material', 'name')
-        .populate('section', 'name')
-        .sort({ order: 1 })
-        .lean();
+    const hasFullAccess = allowedSectionIds.size > 0 || allowedMaterialIds.size > 0;
+
+    let query;
+    if (hasFullAccess) {
+      query = {
+        $or: [
+          allowedSectionIds.size ? { section: { $in: Array.from(allowedSectionIds) } } : null,
+          allowedMaterialIds.size ? { material: { $in: Array.from(allowedMaterialIds) } } : null,
+        ].filter(Boolean)
+      };
     } else {
-      // إذا لم يكن لديه رموز، جلب الفيديوهات المجانية فقط
-      videos = await Video.find({ isFree: true })
-        .populate('material', 'name')
-        .populate('section', 'name')
-        .sort({ order: 1 })
-        .lean();
+      query = { isFree: true };
     }
 
-    res.status(200).json(videos);
+    const videos = await Video.find(query)
+      .populate('material', 'name')
+      .populate('section', 'name')
+      .sort({ order: 1 })
+      .lean();
+
+    res.status(200).json({ success: true, data: videos, meta: { hasFullAccess } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'حدث خطأ أثناء جلب الفيديوهات' });

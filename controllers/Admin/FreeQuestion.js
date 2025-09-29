@@ -17,7 +17,9 @@ const Section = require('../../models/Section');
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { numOfGroups } = req.body;
+  const { numOfGroups } = req.body;
+  const MAX_PER_SECTION = 5;
+  const desiredPerSection = Math.min(parseInt(numOfGroups, 10) || 1, MAX_PER_SECTION);
       let totalCopied = 0;
 
       // حذف جميع المجموعات المجانية الحالية
@@ -29,13 +31,14 @@ const Section = require('../../models/Section');
           $lookup: {
             from: 'questiongroups',
             localField: '_id',
-            foreignField: 'Section',
+            foreignField: 'section',
             as: 'groups',
           },
         },
         {
           $project: {
             _id: 1,
+            material: 1,
             groups: {
               $filter: {
                 input: '$groups',
@@ -49,14 +52,16 @@ const Section = require('../../models/Section');
       ]);
 
       // معالجة كل درس يحتوي على مجموعات صالحة
-      for (const Section of SectionsWithSingleQuestionGroups) {
+      for (const sectionDoc of SectionsWithSingleQuestionGroups) {
         // اختيار مجموعات عشوائية من الدروس التي تحتوي على سؤال واحد
-        const sampledGroups = await QuestionGroup.aggregate([
-          { $match: { 
-            _id: { $in: Section.groups.map(g => g._id) },
-            $expr: { $eq: [{ $size: '$questions' }, 1] } 
-          }},
-          { $sample: { size: numOfGroups } },
+  const sampledGroups = await QuestionGroup.aggregate([
+          {
+            $match: {
+              _id: { $in: sectionDoc.groups.map((g) => g._id) },
+              $expr: { $eq: [{ $size: '$questions' }, 1] },
+            },
+          },
+          { $sample: { size: desiredPerSection } },
           {
             $project: {
               __v: 0,
@@ -72,15 +77,22 @@ const Section = require('../../models/Section');
         if (sampledGroups.length === 0) continue;
 
         // إعداد البيانات للإدخال
-        const groupsToInsert = sampledGroups.map(group => ({
-          ...group,
-          Section: Section._id,
-          questions: group.questions.map(question => ({
-            ...question,
-            choices: question.choices.map(choice => ({
-              ...choice,
+        const groupsToInsert = sampledGroups.map((group) => ({
+          paragraph: group.paragraph,
+          images: group.images,
+          material: group.material || sectionDoc.material,
+          section: sectionDoc._id,
+          questions: group.questions.map((question) => ({
+            isEnglish: question.isEnglish,
+            text: question.text,
+            isMultipleChoice: question.isMultipleChoice,
+            choices: (question.choices || []).map((choice) => ({
+              text: choice.text,
+              isCorrect: choice.isCorrect,
               _id: new mongoose.Types.ObjectId(),
             })),
+            information: question.information,
+            infoImages: question.infoImages,
           })),
         }));
 

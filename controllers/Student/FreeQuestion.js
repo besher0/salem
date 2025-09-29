@@ -1,113 +1,63 @@
-const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
-const { body, param, validationResult } = require('express-validator');
-const { shuffleArray } = require('../../util/shuffleArray');
-const Student = require('../../models/Student');
+const { query, validationResult } = require('express-validator');
 const httpStatus = require('http-status-codes');
 const mongoose = require('mongoose');
-const { Material, Section, FreeQuestionGroup } = require('../../models');
+const Material = require('../../models/Material');
+const Section = require('../../models/Section');
+const FreeQuestionGroup = require('../../models/FreeQuestionGroup');
 
-exports.getFreeQuestionsByMaterial = async (req, res) => {
-  try {
-    // Validate input parameters
-    const { limit = 10, material } = req.query;
+// Get free questions for a material (optionally by section) with paging/limit
+exports.getFreeQuestionsByMaterial = [
+  query('material').notEmpty().withMessage('material مطلوب').custom((v) => mongoose.Types.ObjectId.isValid(v)).withMessage('material غير صالح'),
+  query('section').optional().custom((v) => mongoose.Types.ObjectId.isValid(v)).withMessage('section غير صالح'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    if (!material || !mongoose.Types.ObjectId.isValid(material)) {
-      return res.status(httpStatus.BAD_REQUEST).json({
-        success: false,
-        message: 'معرّف مادة غير صالح',
+  const { material, section } = req.query;
+  const MAX_PER_SECTION = 5;
+
+      const matExists = await Material.exists({ _id: material });
+      if (!matExists) return res.status(404).json({ success: false, message: 'المادة غير موجودة' });
+      if (section) {
+        const secExists = await Section.exists({ _id: section, material });
+        if (!secExists) return res.status(404).json({ success: false, message: 'القسم غير موجود ضمن المادة' });
+      }
+
+      const match = { material: new mongoose.Types.ObjectId(material) };
+      if (section) match.section = new mongoose.Types.ObjectId(section);
+
+      let pipeline = [ { $match: match } ];
+      if (!section) {
+        // Random sample up to MAX_PER_SECTION per section using $rand
+        pipeline = pipeline.concat([
+          { $addFields: { __rand: { $rand: {} } } },
+          { $sort: { section: 1, __rand: 1 } },
+          { $group: { _id: '$section', docs: { $push: '$$ROOT' } } },
+          { $project: { docs: { $slice: [ '$docs', MAX_PER_SECTION ] } } },
+          { $unwind: '$docs' },
+          { $replaceRoot: { newRoot: '$docs' } },
+        ]);
+      } else {
+        // When a specific section is requested, sample up to MAX_PER_SECTION directly
+        pipeline = pipeline.concat([
+          { $sample: { size: MAX_PER_SECTION } },
+        ]);
+      }
+      pipeline.push({ $project: { __v: 0, __rand: 0 } });
+
+      const questions = await FreeQuestionGroup.aggregate(pipeline);
+
+  const totalAvailable = await FreeQuestionGroup.countDocuments(match);
+
+      return res.status(200).json({
+        success: true,
+        data: questions,
+        meta: { count: questions.length, perSectionMax: MAX_PER_SECTION, totalAvailable },
       });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message || 'خطأ في الخادم' });
     }
-
-    const numericLimit = Math.min(Number.parseInt(limit, 10) || 10, 100);
-
-    // Validate material existence
-    const materialExists = await Material.exists({ _id: material });
-    if (!materialExists) {
-      return res.status(httpStatus.NOT_FOUND).json({
-        success: false,
-        message: 'المادة المطلوبة غير موجودة',
-      });
-    }
-
-    // Efficiently gather all related lesson IDs
-    const SectionIds = await Section.find({ material }).distinct('_id');
-    const lessonIds = await Lesson.find({ Section: { $in: SectionIds } }).distinct(
-      '_id'
-    );
-
-    // Optimized aggregation pipeline
-    const aggregationPipeline = [
-      { $match: { lesson: { $in: lessonIds } } },
-      { $sample: { size: numericLimit } },
-      {
-        $project: {
-          __v: 0,
-          createdAt: 0,
-          updatedAt: 0,
-        },
-      },
-    ];
-
-    const questions = await FreeQuestionGroup.aggregate(aggregationPipeline);
-
-    return res.status(httpStatus.OK).json({
-      success: true,
-      data: questions,
-      meta: {
-        count: questions.length,
-        limit: numericLimit,
-        totalAvailable: await FreeQuestionGroup.countDocuments({
-          lesson: { $in: lessonIds },
-        }),
-      },
-    });
-  } catch (error) {
-    // Log error here (consider implementing a proper logging system)
-    console.error('Error fetching free questions:', error);
-
-    return res
-      .status(error.statusCode || httpStatus.INTERNAL_SERVER_ERROR)
-      .json({
-        success: false,
-        message: error.message || 'حدث خلل في الخادم الداخلي',
-        errorCode: error.code || 'INTERNAL_SERVER_ERROR',
-      });
-  }
-};
-exports.getFreeQuestionsjByLesson = async (req, res) => {
-  try {
-    const { limit, lesson } = req.query;
-
-    const validLesson = await Lesson.findById(lesson);
-
-    if (!validLesson) {
-      return res.status(404).json({
-        message: 'لم يتم العثور على الدرس',
-      });
-    }
-
-    // Get random questions
-    const sampleSize = parseInt(limit, 10) || 10;
-    const questions = await FreeQuestionGroup.aggregate([
-      { $match: { lesson: new mongoose.Types.ObjectId(lesson) } },
-      { $sample: { size: sampleSize } },
-      { $project: { __v: 0 } },
-    ]);
-
-    // Populate lesson name
-    // const populatedQuestions = await FreeQuestionGroup.populate(questions, {
-    //   path: 'lesson',
-    //   select: 'name',
-    // });
-
-    res.status(200).json({
-      docs: questions,
-      limit: sampleSize,
-      total: questions.length,
-    });
-  } catch (err) {
-    res.status(err.statusCode || 500).json({
-      error: err.message || 'حدث خطأ في الخادم.',
-    });
-  }
-};
+  },
+];

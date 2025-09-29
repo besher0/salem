@@ -72,7 +72,7 @@ exports.getfiless = async (req, res) => {
       expiration: { $gt: now },
       'codes.value': { $in: student.redeemedCodes.map((rc) => rc.code) },
       'codes.isUsed': true,
-      materialsWithfiless: materialId,
+      materialsWithFiles: materialId,
     });
 
     const filter = { material: materialId };

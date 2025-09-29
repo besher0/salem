@@ -23,7 +23,7 @@ const videoSchema = new Schema(
     ],
     material: {
       type: Schema.Types.ObjectId,
-      ref: 'Course',
+      ref: 'Material',
       required: true,
     },
     section: {
@@ -47,6 +47,5 @@ videoSchema.plugin(mongoosePaginate);
 // فهارس على الحقول الجديدة
 videoSchema.index({ material: 1, order: 1 });
 videoSchema.index({ section: 1 });
-videoSchema.index({ order: 1 });
 
 module.exports = mongoose.model('Video', videoSchema);
