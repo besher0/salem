@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Files = require('../../models/File');
+const Files = require('../../models/file');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const Material = require('../../models/Material');

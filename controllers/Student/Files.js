@@ -29,7 +29,7 @@ exports.getResolutions = async (req, res) => {
   }
 };
 
-const files = require('../../models/File');
+const files = require('../../models/file');
 const CodesGroup = require('../../models/CodesGroup');
 const Student = require('../../models/Student');
 const mongoose = require('mongoose');
