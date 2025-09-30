@@ -179,10 +179,17 @@ exports.getCodesGroups = [
             path: 'materialsWithFiles',
             select: 'name',
           },
-        
+          {
+            path: 'sectionsForQuestions',
+            select: 'name material',
+          },
+          {
+            path: 'sectionsForVideos',
+            select: 'name material',
+          },
         ],
         select:
-          'name codes expiration materialsWithQuestions materialsWithFiles createdAt',
+          'name codes expiration materialsWithQuestions materialsWithFiles sectionsForQuestions sectionsForVideos access createdAt',
       });
 
       // Format response with usage statistics
@@ -203,8 +210,17 @@ exports.getCodesGroups = [
           _id: material._id,
           name: material.name,
         })),
-        // `courses` removed from schema; return an empty array for backward compatibility.
-        // courses: [],
+        sectionsForQuestions: (group.sectionsForQuestions || []).map((s) => ({
+          _id: s._id,
+          name: s.name,
+          material: s.material,
+        })),
+        sectionsForVideos: (group.sectionsForVideos || []).map((s) => ({
+          _id: s._id,
+          name: s.name,
+          material: s.material,
+        })),
+        access: group.access || { videos: false, questions: false, files: false },
       }));
 
       res.status(200).json({
