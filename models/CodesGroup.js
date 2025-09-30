@@ -84,7 +84,6 @@ codesGroupSchema.index(
 codesGroupSchema.index({ expiration: 1 });
 codesGroupSchema.index({ materialsWithQuestions: 1 });
 codesGroupSchema.index({ materialsWithLectures: 1 });
-codesGroupSchema.index({ courses: 1 });
 codesGroupSchema.index({
   'codes.isUsed': 1,
   expiration: 1,

@@ -140,7 +140,6 @@ router.post('/video', multerGlobal, isAuth, createVideo);
 router.get('/videos', multerGlobal, isAuth, getVideos);
 router.put('/video/:id', multerGlobal, isAuth, updateVideo);
 router.delete('/video/:id', multerGlobal, isAuth, deleteVideo);
-const {reorderVideos,updateVideoFreeStatus} = require('../controllers/Admin/Video');
 
 router.post('/updateVideoFreeStatus', isAuth, updateVideoFreeStatus);
 router.post('/reorderVideos', isAuth, reorderVideos);

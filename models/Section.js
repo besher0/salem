@@ -24,4 +24,4 @@ const SectionSchema = new Schema(
 );
 SectionSchema.plugin(mongoosePaginate);
 
-module.exports = mongoose.model('section', SectionSchema);
+module.exports = mongoose.model('Section', SectionSchema);

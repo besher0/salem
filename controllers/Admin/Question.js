@@ -1,7 +1,7 @@
 const QuestionGroup = require('../../models/QuestionGroup');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
-const {Section} = require('../../models/Section');
+const Section = require('../../models/Section');
 const { default: mongoose } = require('mongoose');
 const { default: axios } = require('axios');
 
@@ -31,13 +31,14 @@ exports.createQuestionGroup = async (req, res) => {
 exports.getQuestionGroups = async (req, res) => {
   try {
     await ensureIsAdmin(req.userId);
-    const { limit = 10, page = 1, Section } = req.query;
+    const { limit = 10, page = 1, Section, section } = req.query;
 
-    if (!Section) {
-      return res.status(400).json({ message: 'معرف الدرس مطلوب.' });
+    const sectionId = Section || section;
+    if (!sectionId) {
+      return res.status(400).json({ message: 'معرف القسم مطلوب.' });
     }
 
-    const filter = { Section: new mongoose.Types.ObjectId(Section) };
+    const filter = { section: new mongoose.Types.ObjectId(sectionId) };
     const pageSize = parseInt(limit);
     const currentPage = parseInt(page);
 

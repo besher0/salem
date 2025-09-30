@@ -100,23 +100,34 @@ exports.getAccessibleQuestions = async (req, res) => {
     const hasMaterialQuestionsAccess = validCodes.some(g => (g.materialsWithQuestions || []).some(m => m.toString() === material));
 
     if (!hasSectionQuestionsAccess && !hasMaterialQuestionsAccess) {
-      // Fallback to free questions for this section (up to 5)
+      // Fallback to first N questions from QuestionGroup for this section (up to 5)
       const match = {
         material: new mongoose.Types.ObjectId(material),
         section: new mongoose.Types.ObjectId(section),
       };
       const MAX_PER_SECTION = 5;
-      const freeGroups = await FreeQuestionGroup.aggregate([
+
+      // unwind questions and take the first MAX_PER_SECTION entries
+      const unwound = await QuestionGroup.aggregate([
         { $match: match },
-        { $sample: { size: MAX_PER_SECTION } },
-        { $project: { __v: 0 } },
+        { $unwind: '$questions' },
+        { $replaceRoot: { newRoot: { question: '$questions', groupId: '$_id', paragraph: '$paragraph', images: '$images' } } },
+        { $limit: MAX_PER_SECTION },
+        { $project: { 'question._id': 0 } },
       ]);
 
-      const totalAvailable = await FreeQuestionGroup.countDocuments(match);
+      const totalAvailable = await QuestionGroup.aggregate([
+        { $match: match },
+        { $unwind: '$questions' },
+        { $count: 'total' },
+      ]);
+
+      const totalCount = (totalAvailable[0] && totalAvailable[0].total) || 0;
+
       return res.json({
         success: true,
-        data: freeGroups,
-        meta: { freeFallback: true, perSectionMax: MAX_PER_SECTION, count: freeGroups.length, totalAvailable },
+        data: unwound,
+        meta: { freeFallback: true, perSectionMax: MAX_PER_SECTION, count: unwound.length, totalAvailable: totalCount },
       });
     }
 
@@ -282,22 +293,19 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
         .status(404)
         .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
 
+    // Correctly populate the section (lowercase) and get its material reference.
     const questionGroup = await QuestionGroup.findById(questionGroupId)
-      .populate({
-        path: 'Section',
-        select: 'Section',
-        populate: { path: 'Section', select: 'material' },
-      })
-      .select('paragraph questions images')
+      .populate({ path: 'section', select: 'material' })
+      .select('paragraph questions images section')
       .lean();
 
     if (!questionGroup)
       return res.status(404).json({ message: 'لم يتم العثور على المجموعة.' });
-    if (!questionGroup.Section?.Section?.material) {
+    if (!questionGroup.section || !questionGroup.section.material) {
       return res.status(404).json({ message: 'الدرس أو الوحدة غير موجودة.' });
     }
 
-    const materialId = questionGroup.Section.Section.material;
+    const materialId = questionGroup.section.material;
     const now = new Date();
     let hasAccess = false;
 

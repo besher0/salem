@@ -44,9 +44,9 @@ exports.createVideo = [
         return res.status(400).json({ errors: errors.array() });
       }
 
-         const { name, material, Section, video720, seekPoints, order } = req.body;
+         const { name, material, Section: sectionId, video720, seekPoints, order } = req.body;
 
-      const materialExists = await Material.findById(req.body.material);
+      const materialExists = await Material.findById(material);
       if (!materialExists) {
         return res
           .status(400)
@@ -54,7 +54,7 @@ exports.createVideo = [
       }
 
       // Verify if the associated Section exists
-      const SectionExists = await Section.findById(req.body.section);
+      const SectionExists = await Section.findById(sectionId);
       if (!SectionExists) {
         return res
           .status(400)
@@ -67,32 +67,38 @@ exports.createVideo = [
       //     .json({ message: 'الدورة والوحدة لا ينتميان لنفس المادة' });
       // }
 
-      // Process video720 information
-      if (req.body.video720) {
-        const playDataUrl = `https://video.bunnycdn.com/library/${req.body.video720?.libraryId}/videos/${req.body.video720?.videoId}/play?expires=0`;
-        const videoPlayData = await axios.get(playDataUrl);
-        req.body.video720.downloadUrl = videoPlayData?.data?.fallbackUrl;
+      // Process video720 information and resolve downloadUrl if possible
+      let finalVideo720 = null;
+      if (video720) {
+        try {
+          const playDataUrl = `https://video.bunnycdn.com/library/${video720?.libraryId}/videos/${video720?.videoId}/play?expires=0`;
+          const videoPlayData = await axios.get(playDataUrl, {
+            headers: { AccessKey: process.env.BUNNY_API_KEY },
+          });
+          finalVideo720 = { ...video720, downloadUrl: videoPlayData?.data?.fallbackUrl };
+        } catch (err) {
+          // if Bunny call fails, still accept provided video720 object
+          finalVideo720 = { ...video720 };
+        }
       }
-      const videoCount = await Video.countDocuments({ section: Section });
+
+      const videoCount = await Video.countDocuments({ section: sectionId });
       const isFree = videoCount === 0;
 
-   const video = new Video({
+      const video = new Video({
         name,
         video720: finalVideo720,
         seekPoints: seekPoints || [],
         material,
-        section: Section,
+        section: sectionId,
         isFree,
         order: order || videoCount + 1, // تعيين ترتيب تلقائي إذا لم يُرسل
-        cacheVersion: 1
+        cacheVersion: 1,
       });
-            await video.save();
+      await video.save();
 
-      // Return selected fields in the response
-      // const { _id, name, video720, material, Section, seekPoints } = video;
-      res.status(201).json({
-        video: { _id, name, video720, material, Section, seekPoints },
-      });
+      // Return the saved video
+      res.status(201).json({ video });
     } catch (err) {
       res
         .status(err.statusCode || 500)
