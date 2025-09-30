@@ -21,8 +21,6 @@ const {
   getAccessibleMaterials,
   getAccessibleQuestions,
   getQuestionGroupWithQuestion,
-  getAccessibleCoursesByMaterial,
-  getCourseFiles,
   getAccessibleVideosByCourse,
   getExamByMaterial
 } = require('../controllers/Student/PaidContent');
@@ -83,8 +81,7 @@ router.get('/sections', multerGlobal, isAuth, getSections);    // Alias for Sect
 router.get('/questions', isAuth, getAccessibleQuestions);
 router.get('/question', isAuth, getQuestionGroupWithQuestion);
 
-// Courses — DISABLED
-router.get('/courses', isAuth, getAccessibleCoursesByMaterial);
+// Courses feature removed
 
 // Course Files — DISABLED
 // router.get('/courseFiles/:course', isAuth, (req, res) => {

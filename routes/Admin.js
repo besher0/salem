@@ -16,7 +16,8 @@ const { createMaterial, getMaterials, deleteMaterial, updateMaterial } = require
 // Teacher
 const { createTeacher, getTeachers, deleteTeacher } = require('../controllers/Admin/Teacher');
 
-const { createCourse, getCourses, deleteCourse, updateCourse } = require('../controllers/Admin/Course');
+// Course feature removed: controller import disabled
+// const { createCourse, getCourses, deleteCourse, updateCourse } = require('../controllers/Admin/Course');
 
 // Video
 const { createVideo, getVideos, deleteVideo, updateVideo, getVideosByMaterial, reorderVideos, updateVideoFreeStatus } = require('../controllers/Admin/Video');
@@ -128,10 +129,7 @@ router.post('/teacher', multerGlobal, isAuth, createTeacher);
 router.get('/teachers', multerGlobal, isAuth, getTeachers);
 router.delete('/teacher/:id', multerGlobal, isAuth, deleteTeacher);
 
-router.post('/course', multerGlobal, isAuth,createCourse);
-router.get('/courses', multerGlobal, isAuth,getCourses );
-router.put('/course/:id', multerGlobal, isAuth, updateCourse);
-router.delete('/course/:id', multerGlobal, isAuth,deleteCourse );
+// Course routes removed (feature disabled)
 
 
 

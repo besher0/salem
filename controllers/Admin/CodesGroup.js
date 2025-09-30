@@ -179,23 +179,10 @@ exports.getCodesGroups = [
             path: 'materialsWithFiles',
             select: 'name',
           },
-          {
-            path: 'courses',
-            select: 'name material teacher',
-            populate: [
-              {
-                path: 'material',
-                select: 'name',
-              },
-              {
-                path: 'teacher',
-                select: 'fname lname',
-              },
-            ],
-          },
+        
         ],
         select:
-          'name codes expiration materialsWithQuestions materialsWithFiles courses createdAt',
+          'name codes expiration materialsWithQuestions materialsWithFiles createdAt',
       });
 
       // Format response with usage statistics
@@ -216,14 +203,8 @@ exports.getCodesGroups = [
           _id: material._id,
           name: material.name,
         })),
-        courses: (group.courses || []).map((course) => ({
-          _id: course._id,
-          name: course.name,
-          material: course.material?.name,
-          teacher: course.teacher
-            ? `${course.teacher.fname} ${course.teacher.lname}`
-            : null,
-        })),
+        // `courses` removed from schema; return an empty array for backward compatibility.
+        // courses: [],
       }));
 
       res.status(200).json({

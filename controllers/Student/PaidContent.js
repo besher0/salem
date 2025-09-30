@@ -3,7 +3,6 @@ const CodesGroup = require('../../models/CodesGroup');
 const Material = require('../../models/Material');
 const Student = require('../../models/Student');
 const Question = require('../../models/QuestionGroup');
-const Course = require('../../models/Course');
 const Video = require('../../models/Video');
 const QuestionGroup = require('../../models/QuestionGroup');
 const Section = require('../../models/Section');
@@ -158,42 +157,19 @@ exports.getAccessibleCoursesByMaterial = async (req, res) => {
         .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
     }
 
-    const now = new Date();
-    const accessibleCodesGroups = await CodesGroup.find({
-      _id: { $in: student.redeemedCodes.map((rc) => rc.codesGroup) },
-      expiration: { $gt: now },
-      codes: {
-        $elemMatch: {
-          value: { $in: student.redeemedCodes.map((rc) => rc.code) },
-          isUsed: true,
-        },
-      },
-    })
-      .select('courses')
-      .populate({
-    path: 'courses', 
-    populate: {
-      path: 'teacher', 
-      select: 'fname lname' 
-    }});
-
-    const courseIds = accessibleCodesGroups.flatMap((group) => group.courses);
-    const filteredCourses = courseIds.filter(
-      (course) => course.material && course.material.equals(materialId)
-    );
-
+    // The `courses` field was removed from CodesGroup schema. To avoid Mongoose
+    // strictPopulate errors in environments where the schema has been changed
+    // but controllers still expect courses, return an empty paginated response
+    // for backward compatibility.
     const pageSize = parseInt(limit, 10);
     const currentPage = parseInt(page, 10);
-
-    res.status(200).json({
-      docs: filteredCourses.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize
-      ),
-      totalDocs: filteredCourses.length,
+    return res.status(200).json({
+      docs: [],
+      totalDocs: 0,
       limit: pageSize,
       page: currentPage,
-      totalPages: Math.ceil(filteredCourses.length / pageSize),
+      totalPages: 0,
+      message: 'courses feature disabled or not configured on this server',
     });
   } catch (err) {
     console.error('Error in getAccessibleCoursesByMaterial:', err);
