@@ -8,14 +8,13 @@ const { default: axios } = require('axios');
 // controllers/Admin/QuestionGroup.js  (اجعل الصورة اختيارية)
 exports.createQuestionGroup = async (req, res) => {
   try {
-    const { title, material, section, questions } = req.body;
+    const { material, section, questions } = req.body;
 
-    if (!title || !material || !section)
+    if (!material || !section)
       return res.status(400).json({ success: false, message: 'العنوان، المادة، القسم مطلوبة' });
 
     // الصورة غير مطلوبة: لا نتحقق منها نهائيًا
     const group = await QuestionGroup.create({
-      title,
       material,
       section,
       questions: Array.isArray(questions) ? questions : [],
