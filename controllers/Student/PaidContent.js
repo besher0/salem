@@ -10,66 +10,176 @@ const FreeQuestionGroup = require('../../models/FreeQuestionGroup');
 
 exports.getAccessibleMaterials = async (req, res) => {
   try {
-    const student = await Student.findById(req.userId).select('redeemedCodes');
-    if (!student) {
-      return res
-        .status(404)
-        .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
-    }
+    const student = await Student.findById(req.userId).select('redeemedCodes').lean();
+    if (!student) return res.status(404).json({ message: 'عذراً، لم يتم العثور على الطالب.' });
 
     const now = new Date();
-    const questionMaterialIds = new Set();
-    const filesMaterialIds = new Set();
+    const redeemedGroupIds = (student.redeemedCodes || []).map(rc => rc.codesGroup);
+    const redeemedCodes = (student.redeemedCodes || []).map(rc => rc.code);
 
-    // Separate materials into question and files categories
-    for (const redemption of student.redeemedCodes) {
-      const codesGroup = await CodesGroup.findOne({
-        _id: redemption.codesGroup,
-        expiration: { $gt: now },
-        'codes.value': redemption.code,
-        'codes.isUsed': true,
-  }).select('materialsWithQuestions materialsWithFiles');
+    // Find valid codes groups for this student
+    const validGroups = await CodesGroup.find({
+      _id: { $in: redeemedGroupIds },
+      expiration: { $gt: now },
+      'codes.value': { $in: redeemedCodes },
+      'codes.isUsed': true,
+    }).select('materialsWithQuestions materialsWithFiles materialsWithLectures sections sectionsForQuestions sectionsForVideos access').lean();
 
-      if (codesGroup) {
-        codesGroup.materialsWithQuestions.forEach((id) =>
-          questionMaterialIds.add(id.toString())
-        );
-        codesGroup.materialsWithFiles.forEach((id) =>
-          filesMaterialIds.add(id.toString())
-        );
+    // Build allowed sets
+    const allowedMaterialQ = new Set();
+    const allowedMaterialFiles = new Set();
+    const allowedMaterialVideos = new Set();
+    const allowedSectionQ = new Set();
+    const allowedSectionV = new Set();
+    let globalAccess = { questions: false, videos: false, files: false };
+
+    for (const g of validGroups) {
+      (g.materialsWithQuestions || []).forEach(id => allowedMaterialQ.add(id.toString()));
+      (g.materialsWithFiles || []).forEach(id => allowedMaterialFiles.add(id.toString()));
+      (g.materialsWithLectures || []).forEach(id => allowedMaterialVideos.add(id.toString()));
+      (g.sectionsForQuestions || []).forEach(id => allowedSectionQ.add(id.toString()));
+      (g.sections || []).forEach(id => allowedSectionQ.add(id.toString())); // legacy
+      (g.sectionsForVideos || []).forEach(id => allowedSectionV.add(id.toString()));
+      (g.sections || []).forEach(id => allowedSectionV.add(id.toString())); // legacy may overlap
+      if (g.access) {
+        globalAccess.questions = globalAccess.questions || !!g.access.questions;
+        globalAccess.videos = globalAccess.videos || !!g.access.videos;
+        globalAccess.files = globalAccess.files || !!g.access.files;
       }
     }
 
-    // Convert to arrays of ObjectIds
-    const questionIdsArray = Array.from(questionMaterialIds).map(
-      (id) => new mongoose.Types.ObjectId(id)
-    );
-    const filesIdsArray = Array.from(filesMaterialIds).map(
-      (id) => new mongoose.Types.ObjectId(id)
-    );
+    // Collect material IDs that should be included: from material-level or from sections
+    const materialIdsSet = new Set();
+    // add material-level ones
+    [...allowedMaterialQ, ...allowedMaterialFiles, ...allowedMaterialVideos].forEach(id => materialIdsSet.add(id));
 
-    // Fetch materials in parallel
-  const [materialsWithQuestions, materialsWithFiles] = await Promise.all([
-      Material.find({ _id: { $in: questionIdsArray } })
-        .select('-__v -createdAt -updatedAt')
-        .lean(),
+    // Fetch sections that were explicitly allowed so we can extract their material ids
+    const allAllowedSectionIds = Array.from(new Set([...allowedSectionQ, ...allowedSectionV]));
+    let sectionsFromAllowed = [];
+    if (allAllowedSectionIds.length > 0) {
+      sectionsFromAllowed = await Section.find({ _id: { $in: allAllowedSectionIds } }).lean();
+      sectionsFromAllowed.forEach(s => { if (s.material) materialIdsSet.add(s.material.toString()); });
+    }
 
-      Material.find({ _id: { $in: filesIdsArray } })
-        .select('-__v -createdAt -updatedAt')
-        .lean(),
+    // If no allowed materials/sections, still return empty array
+    if (materialIdsSet.size === 0) {
+      return res.json({ materials: [] });
+    }
+
+    const materialIds = Array.from(materialIdsSet).map(id => new mongoose.Types.ObjectId(id));
+
+    // Load materials and all sections for these materials
+    const [materials, allSections] = await Promise.all([
+      Material.find({ _id: { $in: materialIds } }).select('-__v -createdAt -updatedAt').lean(),
+      Section.find({ material: { $in: materialIds } }).lean(),
     ]);
 
-    res.status(200).json({
-      materialsWithQuestions,
-      materialsWithFiles,
-      count: {
-        questions: materialsWithQuestions.length,
-        filess: materialsWithFiles.length,
-      },
-    });
+    // Index sections by material
+    const sectionsByMaterial = allSections.reduce((acc, s) => {
+      const mid = s.material ? s.material.toString() : 'unknown';
+      if (!acc[mid]) acc[mid] = [];
+      acc[mid].push(s);
+      return acc;
+    }, {});
+
+    // For quick lookup
+    const allowedSectionQSet = new Set(Array.from(allowedSectionQ));
+    const allowedSectionVSet = new Set(Array.from(allowedSectionV));
+    const allowedMaterialQSet = new Set(Array.from(allowedMaterialQ));
+    const allowedMaterialVideosSet = new Set(Array.from(allowedMaterialVideos));
+    const allowedMaterialFilesSet = new Set(Array.from(allowedMaterialFiles));
+
+    const MAX_FREE_PER_SECTION = 5;
+
+    const resultMaterials = [];
+
+    for (const mat of materials) {
+      const matIdStr = mat._id.toString();
+
+      // decide which sections to include: if material-level access -> include all sections, otherwise only allowed sections
+      const allMatSections = sectionsByMaterial[matIdStr] || [];
+      const includeAllSections = allowedMaterialQSet.has(matIdStr) || allowedMaterialVideosSet.has(matIdStr) || allowedMaterialFilesSet.has(matIdStr);
+
+      const sectionsToProcess = includeAllSections
+        ? allMatSections
+        : allMatSections.filter(s => allowedSectionQSet.has(s._id.toString()) || allowedSectionVSet.has(s._id.toString()));
+
+      const processedSections = [];
+
+      // For each section, determine access and fetch content accordingly
+      for (const sec of sectionsToProcess) {
+        const secIdStr = sec._id.toString();
+        const hasFullQuestions = allowedSectionQSet.has(secIdStr) || allowedMaterialQSet.has(matIdStr);
+        const hasFullVideos = allowedSectionVSet.has(secIdStr) || allowedMaterialVideosSet.has(matIdStr) || allowedMaterialFilesSet.has(matIdStr);
+        const hasFiles = allowedMaterialFilesSet.has(matIdStr);
+
+        // Fetch questions
+        let questionsPayload = [];
+        let questionsMeta = { total: 0, freeFallback: false };
+
+        if (hasFullQuestions) {
+          // return full QuestionGroup docs for this material+section
+          const groups = await QuestionGroup.find({ material: mat._id, section: sec._id }).lean();
+          questionsPayload = groups;
+          questionsMeta.total = groups.reduce((acc, g) => acc + (g.questions ? g.questions.length : 0), 0);
+        } else {
+          // fallback: first MAX_FREE_PER_SECTION questions (unwound)
+          const match = { material: mat._id, section: sec._id };
+          const unwound = await QuestionGroup.aggregate([
+            { $match: match },
+            { $unwind: '$questions' },
+            { $replaceRoot: { newRoot: { question: '$questions', groupId: '$_id', paragraph: '$paragraph', images: '$images' } } },
+            { $limit: MAX_FREE_PER_SECTION },
+            { $project: { 'question._id': 0 } },
+          ]);
+          const totalAvailable = await QuestionGroup.aggregate([
+            { $match: match },
+            { $unwind: '$questions' },
+            { $count: 'total' },
+          ]);
+          questionsPayload = unwound;
+          questionsMeta.total = (totalAvailable[0] && totalAvailable[0].total) || 0;
+          questionsMeta.freeFallback = true;
+        }
+
+        // Fetch videos
+        let videosPayload = [];
+        if (hasFullVideos) {
+          videosPayload = await Video.find({ material: mat._id, section: sec._id }).select('-__v -createdAt -updatedAt').lean();
+        } else {
+          videosPayload = await Video.find({ material: mat._id, section: sec._id, isFree: true }).select('-__v -createdAt -updatedAt').lean();
+        }
+
+        processedSections.push({
+          _id: sec._id,
+          name: sec.name,
+          material: sec.material,
+          questions: questionsPayload,
+          questionsMeta,
+          videos: videosPayload,
+          hasFullQuestions,
+          hasFullVideos,
+          hasFiles,
+        });
+      }
+
+      resultMaterials.push({
+        _id: mat._id,
+        name: mat.name,
+        icon: mat.icon,
+        access: {
+          questions: allowedMaterialQSet.has(matIdStr),
+          videos: allowedMaterialVideosSet.has(matIdStr),
+          files: allowedMaterialFilesSet.has(matIdStr),
+        },
+        sections: processedSections,
+      });
+    }
+
+    return res.json({ materials: resultMaterials });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'حدث خطأ في الخادم.' });
+    console.error('Error in getAccessibleMaterials:', err);
+    return res.status(500).json({ error: 'حدث خطأ في الخادم.' });
   }
 };
 
