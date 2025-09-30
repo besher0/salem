@@ -1,12 +1,10 @@
 const { body, param, query, validationResult } = require('express-validator');
-const {
-  Types: { ObjectId },
-  mongoose,
-} = require('mongoose');
+const mongoose = require('mongoose');
+const { Types: { ObjectId } } = mongoose;
 const CodesGroup = require('../../models/CodesGroup');
 const Material = require('../../models/Material');
 const Course = require('../../models/Course');
-const {Section}=('../../models/Section.js')
+const Section = require('../../models/Section');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { v4: uuidv4 } = require('uuid');
 const Student = require('../../models/Student');
@@ -58,6 +56,7 @@ exports.createCodesGroup = [
         materialsWithQuestions = [],
         materialsWithFiles = [],
         sections = [],
+        courses = [],
         codeCount,
         expiration,
       } = req.body;
@@ -94,7 +93,8 @@ exports.createCodesGroup = [
         codes,
         materialsWithQuestions,
         materialsWithFiles,
-        courses,
+        // include courses if provided (backwards compatibility)
+        courses: Array.isArray(courses) ? courses : [],
         expiration: new Date(expiration),
       });
 
@@ -216,7 +216,7 @@ exports.getCodesGroups = [
           _id: material._id,
           name: material.name,
         })),
-        courses: group.courses.map((course) => ({
+        courses: (group.courses || []).map((course) => ({
           _id: course._id,
           name: course.name,
           material: course.material?.name,
