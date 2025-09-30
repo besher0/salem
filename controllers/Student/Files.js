@@ -87,22 +87,9 @@ exports.getfiless = async (req, res) => {
 
     // Modify response based on access
     if (!hasFullAccess) {
-      filess = filess.map((files, index) => {
-        // Always return full details for first files
-        if (index === 0) return files;
-
-        // For other filess, remove accessUrl but keep filename
-        const sanitizedFile = files.file
-          ? {
-              filename: files.file.filename,
-            }
-          : null;
-
-        return {
-          ...files,
-          file: sanitizedFile,
-        };
-      });
+      // If the student does not have a valid code granting access to this material,
+      // do not expose any files at all (instead of only hiding accessUrl).
+      filess = [];
     }
 
     res.status(200).json({
