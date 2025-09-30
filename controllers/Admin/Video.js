@@ -523,12 +523,25 @@ exports.reorderVideos = async (req, res) => {
 
 exports.updateVideoFreeStatus = async (req, res) => {
   try {
-    await ensureIsAdmin(req, res, () => {}); // التحقق من صلاحيات الإداري
-    const { videoId, isFree } = req.body;
+    // تأكّد من صلاحية الأدمن باستخدام المعرف الموجود في req.userId
+    await ensureIsAdmin(req.userId);
+
+    let { videoId, isFree } = req.body;
+
+    // قبول القيم النصية 'true'/'false' من بعض الكلاينت إن أرسلت
+    if (typeof isFree === 'string') {
+      if (isFree === 'true') isFree = true;
+      else if (isFree === 'false') isFree = false;
+    }
 
     // التحقق من صحة المدخلات
     if (!videoId || typeof isFree !== 'boolean') {
       return res.status(400).json({ message: 'يجب إرسال معرف الفيديو وقيمة isFree (true/false).' });
+    }
+
+    // Validate videoId is a Mongo ObjectId to avoid Mongoose CastError
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(400).json({ message: 'معرف الفيديو غير صالح. يجب أن يكون معرف MongoDB (24 hex characters) وليس UUID أو سلسلة أخرى.' });
     }
 
     // التحقق من وجود الفيديو
@@ -537,12 +550,14 @@ exports.updateVideoFreeStatus = async (req, res) => {
       return res.status(404).json({ message: 'الفيديو غير موجود.' });
     }
 
-    // تحديث حالة isFree
+    // تحديث حالة isFree وحفظ التغيير
+    const previous = video.isFree;
     video.isFree = isFree;
     await video.save();
 
-    res.status(200).json({ message: 'تم تحديث حالة الفيديو بنجاح.', video });
+    res.status(200).json({ message: 'تم تحديث حالة الفيديو بنجاح.', video, previousIsFree: previous });
   } catch (error) {
-    res.status(500).json({ message: 'حدث خطأ أثناء تحديث حالة الفيديو.' });
+    console.error('updateVideoFreeStatus error:', error);
+    res.status(500).json({ message: 'حدث خطأ أثناء تحديث حالة الفيديو.', ...(process.env.NODE_ENV === 'development' && { error: error.message }) });
   }
 };
