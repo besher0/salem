@@ -376,6 +376,52 @@ exports.deleteVideo = [
   },
 ];
 
+// Get all videos for a material grouped by section (Admin)
+exports.getVideosByMaterial = async (req, res) => {
+  try {
+    await ensureIsAdmin(req.userId);
+    const { material } = req.query;
+    const { section } = req.query;
+    if (!material) return res.status(400).json({ message: 'material مطلوب' });
+    if (!mongoose.Types.ObjectId.isValid(material)) return res.status(400).json({ message: 'معرف المادة غير صالح' });
+
+    const materialExists = await Material.exists({ _id: material });
+    if (!materialExists) return res.status(404).json({ message: 'المادة غير موجودة' });
+    if (section) {
+      if (!mongoose.Types.ObjectId.isValid(section)) return res.status(400).json({ message: 'معرف القسم غير صالح' });
+      const sectionExists = await Section.exists({ _id: section, material });
+      if (!sectionExists) return res.status(404).json({ message: 'القسم غير موجود ضمن المادة' });
+
+      const vids = await Video.find({ material, section })
+        .populate('section', 'name')
+        .sort({ order: 1 })
+        .lean();
+      return res.status(200).json({ success: true, data: vids });
+    }
+
+    const videos = await Video.find({ material })
+      .populate('section', 'name')
+      .sort({ 'section': 1, order: 1 })
+      .lean();
+
+    // Group by section
+    const grouped = videos.reduce((acc, v) => {
+      const secId = v.section?._id?.toString() || 'unassigned';
+      if (!acc[secId]) {
+        acc[secId] = { section: v.section || null, videos: [] };
+      }
+      acc[secId].videos.push(v);
+      return acc;
+    }, {});
+
+    const result = Object.values(grouped);
+    return res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    console.error('getVideosByMaterial error', err);
+    return res.status(500).json({ message: err.message || 'حدث خطأ' });
+  }
+};
+
 
 // ===== Custom Additions =====
 

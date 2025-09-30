@@ -145,6 +145,9 @@ const {reorderVideos,updateVideoFreeStatus} = require('../controllers/Admin/Vide
 router.post('/updateVideoFreeStatus', isAuth, updateVideoFreeStatus);
 router.post('/reorderVideos', isAuth, reorderVideos);
 
+// Admin: videos by material grouped by section
+router.get('/videosByMaterial', multerGlobal, isAuth, getVideosByMaterial);
+
 // Codes Group (kept as-is; semantics adjusted in controllers)
 router.post('/codesGroup', multerGlobal, isAuth, createCodesGroup);
 router.get('/codesGroups', multerGlobal, isAuth, getCodesGroups);
