@@ -19,7 +19,7 @@ const { createTeacher, getTeachers, deleteTeacher } = require('../controllers/Ad
 const { createCourse, getCourses, deleteCourse, updateCourse } = require('../controllers/Admin/Course');
 
 // Video
-const { createVideo, getVideos, deleteVideo, updateVideo } = require('../controllers/Admin/Video');
+const { createVideo, getVideos, deleteVideo, updateVideo, getVideosByMaterial, reorderVideos, updateVideoFreeStatus } = require('../controllers/Admin/Video');
 
 // Codes Group
 const {
