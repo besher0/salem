@@ -119,8 +119,8 @@ exports.generateCodes = [
 
       await cg.save();
 
-      // Return sample of codes
-      const sample = cg.codes.slice(0, Math.min(50, cg.codes.length)).map(c => c.value);
+      // Return all codes
+      const sample = cg.codes.map(c => c.value);
   res.status(201).json({ message: 'CodesGroup created', codesGroupId: cg._id, sample, access: cg.access, sectionsForVideos: cg.sectionsForVideos, sectionsForQuestions: cg.sectionsForQuestions, materialsWithFiles: cg.materialsWithFiles, materialsWithQuestions: cg.materialsWithQuestions, materialsWithLectures: cg.materialsWithLectures });
     } catch (err) {
       next(err);

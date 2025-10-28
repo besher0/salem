@@ -333,11 +333,11 @@ exports.login = [
           .status(401)
           .json({ message: 'بيانات تسجيل الدخول غير صالحة!' });
       }
-      // if (loadedStudent.deviceId !== deviceId) {
-      //   return res
-      //     .status(401)
-      //     .json({ message: 'لا يمكن فتح الحساب من جهاز مختلف' });
-      // }
+      if (loadedStudent.deviceId !== deviceId) {
+        return res
+          .status(401)
+          .json({ message: 'لا يمكن فتح الحساب من جهاز مختلف' });
+      }
 
       const token = jwt.sign(
         {
